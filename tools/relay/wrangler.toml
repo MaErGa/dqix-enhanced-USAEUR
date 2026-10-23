@@ -1,0 +1,13 @@
+# The relay for playing with friends far away (see worker.js). Deployed to
+# Cloudflare's free plan by deploy-relay.bat.
+name = "dqix-relay"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

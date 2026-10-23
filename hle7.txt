@@ -1,0 +1,4 @@
+# ARM7 functions the runtime implements natively instead of recompiling.
+a7w 037fca58   # OS_SaveContext   -> runtime/threads.c
+a7w 037fca8c   # OS_LoadContext   -> runtime/threads.c
+a7w 037fb528   # OS_IrqHandler_ThreadSwitch -> runtime/threads.c

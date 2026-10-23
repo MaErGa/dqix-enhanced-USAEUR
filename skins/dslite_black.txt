@@ -1,0 +1,4 @@
+# Where the screens are in dslite_black.png (pixels): x y width height
+name Jet Black (photo)
+top 226 66 390 291
+bottom 225 511 390 292

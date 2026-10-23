@@ -1,0 +1,5 @@
+# Functions the runtime implements natively instead of recompiling.
+# <module> <address>
+main 020c7d34   # OS_SaveContext   -> runtime/threads.c
+main 020c7d80   # OS_LoadContext   -> runtime/threads.c
+itcm 01ff8068   # OS_IrqHandler_ThreadSwitch -> runtime/threads.c

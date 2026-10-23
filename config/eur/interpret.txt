@@ -1,0 +1,9 @@
+# ARM9 functions run in the interpreter instead of recompiled: their bytes in
+# the ROM are encrypted and the game decrypts them in place before calling
+# them (anti-piracy in overlay 29). The decomp lists them as data.
+ov029 021d8e1c
+ov029 021d8e94
+ov029 021d8f0c
+ov029 021d8f84
+ov029 021d8ffc
+ov029 021d9074

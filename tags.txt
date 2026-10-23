@@ -1,0 +1,12 @@
+# Calls whose 3D drawing carries a tag: <module> <call address> <tag>
+# Only the picture changes: the game runs exactly the same (gpu3d.c leaves
+# tagged polygons out of what is drawn, never out of what the game can read).
+
+# 1: the stylus arrow on the field (func_02096c38: a dot and a ring where the
+# stylus first touched, and the arrow to where it is now). Hidden while
+# walking with the left stick (Modern > Walk in any direction), shown for the
+# mouse / touch screen.
+main 02096e20 1    # func_020473c8
+main 02096ed0 1    # func_020472e4
+main 02096f1c 1    # func_020472e4
+main 02096f50 1    # func_020473c8

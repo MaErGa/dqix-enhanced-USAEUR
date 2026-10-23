@@ -1,0 +1,10 @@
+# Instruction overrides applied when recompiling: <module> <address> <new ARM word>
+# The ROM is never modified; only the translated code changes.
+
+# Anti-piracy memory leak in the background file loader (overlay 34).
+# After loading a file from a GPC archive it hashes "entropy" data and, when
+# the hash's low bits are 0, allocates 8 bytes from the main heap that are
+# never freed. These leaks fragment the heap until, after the first battle,
+# the field can't get the 257 KB block it needs and the game hangs.
+# Replace the allocation call (bl 0x02012d88) with a NOP.
+ov034 022a2878 e1a00000

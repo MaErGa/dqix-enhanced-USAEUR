@@ -1,0 +1,48 @@
+# Private project. Never commit anything derived from the ROM: the generated C
+# (build/recomp*, gen*/), the ROM itself, extracted files, saves, reports, dumps.
+*.nds
+*.sav
+*.o
+*.exe
+*.dll
+/dqix
+/dqix-sdl*
+obj/
+build/
+gen/
+gen7/
+reports/
+extract/
+*.ppm
+*.bmp
+*.wav
+__pycache__/
+*.pyc
+
+# One-time history setup files
+*.bundle
+setup-history.bat
+
+# the built-in Wi-Fi server's files: DQIX's downloads as Nintendo served them (game data, not ours)
+/wfc/*/
+# the one-click build's working files and result, your ROM, and the optional
+# extras (game data)
+/build/
+/game/
+/rom/*.nds
+/extras/*
+!/extras/README.txt
+/release/
+# bookmarks: copies of saves and settings at each bookmark (private)
+/bookmarks/
+# private working notes (machine paths etc.)
+/docs/PRIVATE-NOTES.md
+# a game folder's own files if one is ever run from here (sessions, settings, Wi-Fi ID)
+session/
+settings.ini
+wireless.bin
+# your own upload helper (names your GitHub account)
+upload-to-github.bat
+/rom/last-rom.txt
+# the in-game updater's working folder (downloads, the previous version)
+/update/

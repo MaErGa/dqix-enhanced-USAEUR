@@ -59,6 +59,10 @@ static void build_menu(void) {
     HMENU game = sub(g_bar, "&Game");
     item(game, MI_PAUSE, "&Pause\tP");
     item(game, MI_TURBO, "&Fast forward\t(or hold Tab)");
+    HMENU spd = sub(game, "Spee&d of the fast forward");
+    item(spd, MI_SPEED0, "2x");
+    item(spd, MI_SPEED0 + 1, "4x");
+    item(spd, MI_SPEED0 + 2, "&Unlimited");
     item(game, MI_RESET, "&Reset...\tCtrl+R");
     sep(game);
     item(game, MI_VOLUME, "&Volume...\t- / =");
@@ -67,6 +71,9 @@ static void build_menu(void) {
     sep(game);
     item(game, MI_SHOT, "Save &screenshot\tF12");
     item(game, MI_REPORT, "Save &bug report\tF10");
+    sep(game);
+    item(game, MI_SAVE_IMPORT, "&Import a save...");
+    item(game, MI_SAVE_EXPORT, "Export the s&ave to a file");
     sep(game);
     item(game, MI_EXIT, "E&xit\tEsc");
 

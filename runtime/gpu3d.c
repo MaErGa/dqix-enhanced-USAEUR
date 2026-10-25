@@ -1540,6 +1540,22 @@ static void render_frame(void) {
 /* ================================================================ frame flow */
 const Renderer3D* g_renderer3d;
 int g_renderer3d_verify;
+
+/* A console nobody looks at (another player's, in a session) doesn't need its pictures: drawing them
+ * is most of what the CPU does for a console (about three quarters, measured). The game state doesn't
+ * depend on the pictures unless the game captures the screen into VRAM and reads it back; the first
+ * capture turns the drawing back on for good (gpu2d.c). If anything did differ, the sessions' RAM
+ * fingerprints would report it as out of sync. */
+int g_video_hidden;
+static void hidden_vblank(void) {}
+static void hidden_render(const Frame3D* f) { (void)f; }
+static const Renderer3D g_hidden3d = { hidden_vblank, hidden_render };
+void video_hide(void) { g_video_hidden = 1; g_renderer3d = &g_hidden3d; }
+void video_needed(void) {
+    if (!g_video_hidden) return;
+    g_video_hidden = 0;
+    if (g_renderer3d == &g_hidden3d) g_renderer3d = NULL;
+}
 static int g_render_pending;                                        /* a render is due at line 215 */
 
 static int ysort_cmp(const void* a, const void* b) {

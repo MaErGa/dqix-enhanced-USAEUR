@@ -23,6 +23,8 @@ enum {
     MI_LANG0 = 300,                                                     /* + the interface language's index (i18n.h) */
     MI_GAMELANG0 = 320,                                                 /* automatic; + 1..GAMELANG_COUNT: the game's text */
     MI_LANG_HELP = 330,
+    MI_SAVE_IMPORT = 340, MI_SAVE_EXPORT,
+    MI_SPEED0 = 350,                                                    /* + 0: 2x, 1: 4x, 2: unlimited (fast forward) */
 };
 
 /* The languages Dragon Quest IX has in its DS settings, in the DS's own order after Japanese:

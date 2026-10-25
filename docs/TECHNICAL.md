@@ -413,3 +413,25 @@ English and, with the DS language set to Spanish, in Spanish (headless, scripted
 checked: playing past the title screen (a new adventure, fields, battles), DQVC and the downloads
 (`wfc/` only has the USA files). If something misbehaves in the European version, report it with
 Game > Save bug report.
+
+
+## Performance notes
+
+Measured on the European version, headless, with the shipped flags (-O1, -DRECOMP_TRACE), over title, intro,
+loading a save and a dialogue (6,100 frames):
+
+- The recompiled game code is about 3% of the CPU. Almost everything else is drawing: the 2D layer
+  composition (`compose_line`), the software 3D rasteriser (`render_scanline`, `texture_lookup`) and the 2D
+  layers. The per-function trace hook (`RECOMP_TRACE`) is negligible (3.9 million calls in 2,500 frames; no
+  measurable difference with a lighter hook), so it stays.
+- Another player's console in a session is never looked at, so it does not draw (`video_hide()` in
+  `gpu3d.c`, called by `frontend_none.c` when the console is hosted): the same 6,100 frames take 11 s
+  instead of 39 s. The 4 MB of main RAM come out identical except the clock bytes the DS reads from the
+  host's time. If the game ever captures the screen into VRAM (it did not in these frames), drawing
+  comes back for that console (`video_needed()`); the sessions' RAM fingerprints would report any
+  difference as out of sync.
+- `compose_line` looks at the layers front to back and stops when the rest cannot change the pixel. The
+  output was compared bit for bit with the old code over the same frames, in the normal path and with the
+  GPU renderer's information forced on.
+- `-O3`, with or without `-march=native`, on the drawing files was 3 to 12% faster here, which is not
+  worth the risk of a build copied to another PC (it would not run without the instructions).

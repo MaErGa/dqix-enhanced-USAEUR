@@ -32,6 +32,7 @@
 #include "gl_render.h"
 #include "menu.h"
 #include "i18n.h"
+#include "saveimport.h"
 #include "version.h"
 #include "session.h"
 #include "air.h"
@@ -74,6 +75,7 @@ static char g_notice[160]; static uint64_t g_notice_until;        /* a short mes
 static float g_small_alpha = 1.0f;                                /* ...as shown now (solid while the mouse is on it) */
 static uint64_t g_next_frame, g_perf_freq;
 static int g_fast;
+static int g_fast_mult = 0;                 /* the fast forward's speed: 2, 4, or 0 for as fast as the PC can (settings.ini: fast_speed) */
 static uint32_t g_fps_frames; static uint64_t g_fps_t0;
 static int g_headless;          /* DQIX_NOWINDOW: run without a window (still uses SDL audio off) */
 static int g_hidden;            /* another player's console in a session: no window, no sound, no pacing */
@@ -391,6 +393,7 @@ static void settings_load(void) {
             g_player_name[strcspn(g_player_name, "\r\n")] = 0;
             continue;
         }
+        if (!strcmp(key, "fast_speed")) { int v = atoi(val); g_fast_mult = (v == 2 || v == 4) ? v : 0; continue; }
         if (!strcmp(key, "language")) { snprintf(g_lang_setting, sizeof g_lang_setting, "%s", val); continue; }
         if (!strcmp(key, "game_language")) { snprintf(g_gamelang_setting, sizeof g_gamelang_setting, "%s", val); continue; }
         if (!strcmp(key, "update_check")) { g_update_auto = atoi(val) != 0; continue; }
@@ -453,6 +456,8 @@ static void settings_save(void) {
     FILE* f = fopen(SETTINGS, "w");
     if (!f) return;
     fprintf(f, "# Dragon Quest IX (PC) settings. The game saves this when you change something.\n");
+    fprintf(f, "# speed of the fast forward (Tab): 2, 4, or 0 for as fast as the PC can\n");
+    fprintf(f, "fast_speed = %d\n", g_fast_mult);
     fprintf(f, "# language of the menus and messages: auto (your system's) or a code:");
     for (int i = 0; i < i18n_count(); i++) fprintf(f, " %s", i18n_code(i));
     fprintf(f, "\n");
@@ -1204,6 +1209,7 @@ static void menu_sync(void) {
     menu_check(MI_PAUSE, g_paused);
     menu_check(MI_UPDATE_AUTO, g_update_auto);
     menu_check(MI_TURBO, g_turbo);
+    for (int i = 0; i < 3; i++) menu_check(MI_SPEED0 + i, g_fast_mult == (i == 0 ? 2 : i == 1 ? 4 : 0));
     menu_check(MI_DLC, g_opt.dlc);
     menu_check(MI_NET, g_net_want);
     menu_check(MI_SRV_BUILTIN, !strcmp(g_wfc_server, "builtin"));
@@ -1722,6 +1728,27 @@ static void game_language(int k) {                                      /* 0 aut
     if (ask_yes(N_("Game text"), N_("The game's own text changes when it starts again.\n\nStart the game again now? Anything since you last saved in the game is lost."), N_("Restart"))) restart_with(NULL);
 }
 
+/* A save file dropped on the window (or chosen in the menu): from DeSmuME or another emulator. */
+static void import_save(const char* path) {
+    if (session_requested()) { info_box(SDL_MESSAGEBOX_INFORMATION, N_("Import save"), N_("Not while playing with friends: the game restarts. Leave the session first (Wireless menu)."), g_win); return; }
+    FILE* f = fopen(path, "rb");
+    if (!f) { info_box(SDL_MESSAGEBOX_ERROR, N_("Import save"), N_("The file couldn't be read."), g_win); return; }
+    static uint8_t in[1 << 20], out[SAVE_SIZE];
+    size_t n = fread(in, 1, sizeof in, f);
+    fclose(f);
+    int r = save_convert(in, n, out);
+    if (r != SAVE_OK) {
+        info_box(SDL_MESSAGEBOX_ERROR, N_("Import save"),
+                 r == SAVE_BAD_SIZE ? N_("This file isn't a Dragon Quest IX save: its size isn't one a save has. Drop a .sav, .dsv or .duc file from your emulator.")
+                 : r == SAVE_NOT_DQIX ? N_("This file isn't a Dragon Quest IX save (it doesn't start with the game's name). It may be empty, or from another game.")
+                 : N_("This save has no adventure in it: it's empty. Drop the save file of a game you played."), g_win);
+        return;
+    }
+    if (!ask_yes(N_("Import save"), N_("Replace your adventure with this save?\n\nYour current save is kept in the game folder (dqix.sav.before-import-...). The game restarts."), N_("Import"))) return;
+    if (backup_replace(out, SAVE_SIZE) != 0) { info_box(SDL_MESSAGEBOX_ERROR, N_("Import save"), N_("The save couldn't be written."), g_win); return; }
+    restart_with(NULL);
+}
+
 static void do_action(int id) {
     int relayout = 0;
     switch (id) {
@@ -1768,6 +1795,21 @@ static void do_action(int id) {
         session_action(id);
         break;
     case MI_SHOT: g_shot_req = 1; break;
+    case MI_SAVE_IMPORT:
+        info_box(SDL_MESSAGEBOX_INFORMATION, N_("Import save"), N_("Drag a save file onto the game window: a .sav, .dsv or .duc from DeSmuME or another emulator. The game checks it, keeps your current save in its folder, and restarts with the new one."), g_win);
+        break;
+    case MI_SAVE_EXPORT: {
+        uint32_t sz; const uint8_t* img = backup_image(&sz);
+        FILE* f = fopen("dqix-export.sav", "wb");
+        if (f && fwrite(img, 1, sz, f) == sz) {
+            fclose(f);
+            info_box(SDL_MESSAGEBOX_INFORMATION, N_("Export save"), N_("Your save is copied to dqix-export.sav in the game folder. It is a plain .sav: DeSmuME and other emulators can import it."), g_win);
+        } else {
+            if (f) fclose(f);
+            info_box(SDL_MESSAGEBOX_ERROR, N_("Export save"), N_("The save couldn't be written."), g_win);
+        }
+        break;
+    }
     case MI_SEND_REPORT:                                          /* Help > Send a bug report: the same as F10 */
     case MI_REPORT: {
         extern char g_report_last_dir[300];
@@ -1917,6 +1959,7 @@ static void do_action(int id) {
         break;
     default:
         if (id >= MI_SHELLC0 && id < MI_SHELLC0 + N_SHELLS) { g_opt.shell_color = id - MI_SHELLC0; g_color_chosen = 1; relayout = 1; }
+        else if (id >= MI_SPEED0 && id < MI_SPEED0 + 3) g_fast_mult = id == MI_SPEED0 ? 2 : id == MI_SPEED0 + 1 ? 4 : 0;
         else if (id >= MI_LANG0 && id < MI_LANG0 + i18n_count()) ui_language(id - MI_LANG0);
         else if (id >= MI_GAMELANG0 && id <= MI_GAMELANG0 + GAMELANG_COUNT) game_language(id - MI_GAMELANG0);
         else return;
@@ -2017,6 +2060,7 @@ static void handle_events(void) {
         if (mi) { do_action(mi); continue; }
         switch (e.type) {
         case SDL_QUIT: exit(0);
+        case SDL_DROPFILE: import_save(e.drop.file); SDL_free(e.drop.file); break;
         case SDL_KEYDOWN: {
             if (e.key.repeat || !g_win) break;
             SDL_Scancode k = e.key.keysym.scancode;
@@ -2142,8 +2186,8 @@ void frontend_frame(void) {
     /* pacing */
     uint64_t now = SDL_GetPerformanceCounter();
     uint64_t period = (uint64_t)(g_perf_freq / DS_FPS);
-    if (g_fast) {
-        sound_discard();
+    if (g_fast) sound_discard();
+    if (g_fast && g_fast_mult == 0) {
         g_next_frame = now;
     } else {
         /* An even beat of one frame per 1/59.83 s from the PC's precise clock.
@@ -2152,14 +2196,14 @@ void frontend_frame(void) {
          * beat by at most 0.5%: too much queued -> slightly slower, too little ->
          * slightly faster. Pacing by the queue directly released frames in pairs. */
         double adjust = 1.0;
-        if (g_audio) {
+        if (g_audio && !g_fast) {
             static double avg = -1;
             double q = (double)sound_buffered();
             avg = avg < 0 ? q : avg + (q - avg) * 0.02;
             double err = (avg - (double)AUDIO_TARGET) / (double)AUDIO_TARGET;
             adjust = 1.0 + fmax(-0.005, fmin(0.005, err * 0.02));
         }
-        g_next_frame += (uint64_t)((double)period * adjust);
+        g_next_frame += (uint64_t)((double)period * adjust / (g_fast ? g_fast_mult : 1));
         if (now > g_next_frame + period * 6) g_next_frame = now;          /* fell far behind: don't try to catch up */
         else {
             while ((now = SDL_GetPerformanceCounter()) < g_next_frame) {

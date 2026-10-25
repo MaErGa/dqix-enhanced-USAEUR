@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nds.h"
+#include "gpu3d.h"
 
 uint32_t g_screen[2][256 * 192];
 uint32_t g_engine_out[2][256 * 192];
@@ -441,7 +442,8 @@ static void render_engine_line(int eng, int y) {
      * or for display capture (which can grab it while a VRAM bank is shown). */
     static uint32_t line6[256];
     int capture = eng == 0 && g_cap_active;
-    int need = dmode == 1 || capture;
+    if (capture) video_needed();                                    /* this one is read back: draw from now on */
+    int need = (dmode == 1 && !g_video_hidden) || capture;
     int composed = 0;
     if (need) {
         if (!(pow & (eng == 0 ? 0x2 : 0x200))) {                    /* engine powered off: A black, B white */
@@ -466,6 +468,39 @@ static void render_engine_line(int eng, int y) {
 /* Compose one line of BG/OBJ layers (6-bit, before master brightness) into
  * line6; when dst is given, also write the displayed pixels (and the GPU
  * renderer's per-pixel info). */
+#define MARK3D 0xFFu                                                /* GL mode: the 3D layer, decided on the GPU */
+
+/* One layer's pixel at x (6-bit colour with its flags above), or 0 if the layer doesn't show there. */
+static inline int layer_px(int L, int x, uint8_t wm, const ObjLine* objl, const BgLine* bgl, int bg_3d, int gl3d, uint32_t* out) {
+    uint32_t v;
+    if (L >= 4) {
+        if (!(wm & 0x10) || !(objl->col[x] & PX_OPAQUE) || objl->prio[x] != L - 4) return 0;
+        v = to6(objl->col[x]) | ((uint32_t)objl->flag[x] << 24);
+    } else if (L == 0 && bg_3d) {
+        if (!(wm & 1)) return 0;
+        if (gl3d) v = MARK3D << 24;
+        else {
+            uint32_t c = g_3d_line32[x];
+            if (!g_3d_present || !(c >> 24)) return 0;
+            v = (c & 0x3F3F3F) | ((0x40u | ((c >> 24) & 0x1F)) << 24);
+        }
+    } else {
+        if (!(wm & (1 << L)) || !(bgl[L].col[x] & PX_OPAQUE)) return 0;
+        v = to6(bgl[L].col[x]) | (1u << (24 + L));
+    }
+    *out = v;
+    return 1;
+}
+
+/* Does the colour of the pixel under this one (v) matter for the result? Only when v blends with it:
+ * a semi-transparent sprite or a 3D layer with its own alpha, or a layer the alpha blend applies to.
+ * (A superset is safe; see color_composite.) */
+static inline int needs_partner(uint32_t v, uint16_t bldcnt, int fx) {
+    uint32_t f = v >> 24;
+    if (f & 0xC0) return 1;
+    return fx && (bldcnt & f) && ((bldcnt >> 6) & 3) == 1;
+}
+
 static void compose_line(Engine* e, int eng, int y, uint32_t disp, uint32_t* line6, uint32_t* dst, uint16_t mb) {
 
     int mode = disp & 7;
@@ -536,31 +571,23 @@ static void compose_line(Engine* e, int eng, int y, uint32_t disp, uint32_t* lin
     uint32_t* c2out = &g_comp_c2[y * 256];
     uint8_t* info = &g_comp_info[y * 256 * 4];
     uint32_t mbbyte = (uint32_t)((((mb >> 14) & 3) << 5) | ((mb & 31) > 16 ? 16 : (mb & 31))) << 24;
-    #define MARK3D 0xFFu                                            /* GL mode: the 3D layer, decided on the GPU */
+    /* For each pixel, the top three layers that show (v1 on top), found from the front and only as
+     * far down as the result can depend on them: most pixels are decided by the first layer. */
     for (int x = 0; x < 256; x++) {
-        uint32_t v1 = backdrop, v2 = 0, v3 = 0;
         uint8_t wm = winmask[x];
-        for (int k = 0; k < norder; k++) {
-            int L = order[k];
-            uint32_t v;
-            if (L >= 4) {
-                if (!(wm & 0x10) || !(objl.col[x] & PX_OPAQUE) || objl.prio[x] != L - 4) continue;
-                v = to6(objl.col[x]) | ((uint32_t)objl.flag[x] << 24);
-            } else if (L == 0 && bg_3d) {
-                if (!(wm & 1)) continue;
-                if (gl3d) v = MARK3D << 24;
-                else {
-                    uint32_t c = g_3d_line32[x];
-                    if (!g_3d_present || !(c >> 24)) continue;
-                    v = (c & 0x3F3F3F) | ((0x40u | ((c >> 24) & 0x1F)) << 24);
-                }
-            } else {
-                if (!(wm & (1 << L)) || !(bgl[L].col[x] & PX_OPAQUE)) continue;
-                v = to6(bgl[L].col[x]) | (1u << (24 + L));
-            }
-            v3 = v2; v2 = v1; v1 = v;
-        }
         int fx = (wm & 0x20) != 0;
+        uint32_t st[3]; int n = 0, k = norder, bd = 0;
+#define FILL(cnt) while (n < (cnt)) { uint32_t pv = 0; int ok = 0; \
+            while (k > 0) { if (layer_px(order[--k], x, wm, &objl, bgl, bg_3d, gl3d, &pv)) { ok = 1; break; } } \
+            st[n++] = ok ? pv : (bd++ ? 0 : backdrop); }              /* after the layers: the backdrop, then nothing */
+        FILL(1);
+        uint32_t v1 = st[0], v2 = 0, v3 = 0;
+        if (gl3d && (wm & 1)) {                                     /* the 3D layer is drawn by the GPU: see below */
+            FILL(2); v2 = st[1];
+            if ((v1 >> 24) == MARK3D) { if (needs_partner(v2, bldcnt, fx)) { FILL(3); v3 = st[2]; } }
+            else if ((v2 >> 24) == MARK3D) { FILL(3); v3 = st[2]; }
+        } else if (needs_partner(v1, bldcnt, fx)) { FILL(2); v2 = st[1]; }
+#undef FILL
         if (!dst) { line6[x] = color_composite(v1, v2, bldcnt, fx, eva, evb, evy); continue; }
         if (gl3d && (v1 >> 24) == MARK3D) {                         /* 3D on top */
             uint32_t f2 = v2 >> 24;
@@ -591,7 +618,6 @@ static void compose_line(Engine* e, int eng, int y, uint32_t disp, uint32_t* lin
         line6[x] = color_composite(v1, v2, bldcnt, fx, eva, evb, evy);
         dst[x] = to_rgb6(master_bright(line6[x], mb));
     }
-    #undef MARK3D
 }
 
 /* ---------------------------------------------------------------- frame flow */

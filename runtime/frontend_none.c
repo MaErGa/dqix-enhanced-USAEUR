@@ -35,6 +35,7 @@ void frontend_init(int argc, char** argv) {
     const char* p = getenv("DQIX_WAV");
     if (p && (g_wav = fopen(p, "wb"))) { wav_header(g_wav, 0); atexit(wav_close); }
     if (getenv("DQIX_NO3D")) g_renderer3d = &g_null3d;
+    if (rt_hosted() || getenv("DQIX_HIDE_VIDEO")) video_hide();      /* another player's console in a session (DQIX_HIDE_VIDEO: tests) */
 }
 
 /* DQIX_FRAMETIME=from_frame: histogram of host time per frame (performance checks) */

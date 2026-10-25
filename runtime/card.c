@@ -2,6 +2,7 @@
  * Registers 0x040001A0-0x040001AF live in g_io and are shared by the CPUs. */
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "nds.h"
 
 /* ---------------------------------------------------------------- ROM */
@@ -136,6 +137,26 @@ void backup_flush(void) {
     fwrite(g_backup, 1, g_backup_size, f);
     fclose(f);
     g_backup_dirty = 0;
+}
+
+/* An imported save (saveimport.c) takes the place of the one in use. The one it replaces is kept
+ * next to it, as <save>.before-import-<date and time>, so nothing is lost. */
+int backup_replace(const uint8_t* data, uint32_t n) {
+    if (n > BACKUP_MAX || !g_backup_path[0]) return -1;
+    char keep[1200]; char stamp[32]; time_t now = time(NULL);
+    strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", localtime(&now));
+    snprintf(keep, sizeof keep, "%s.before-import-%s", g_backup_path, stamp);
+    FILE* f = fopen(keep, "wb");
+    if (!f) return -1;
+    size_t w = fwrite(g_backup, 1, g_backup_size, f);
+    fclose(f);
+    if (w != g_backup_size) return -1;
+    memset(g_backup, 0xFF, sizeof g_backup);
+    memcpy(g_backup, data, n);
+    g_backup_size = n;
+    g_backup_dirty = 1;
+    backup_flush();
+    return g_backup_dirty ? -1 : 0;
 }
 
 /* ---------------------------------------------------------------- downloadable content

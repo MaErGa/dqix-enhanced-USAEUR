@@ -40,18 +40,20 @@ def addr_like(w):
 
 
 def modules(xu, xe):
-    mods = {'main': (xu + '/arm9/arm9.bin', xe + '/arm9/arm9.bin', 0x02000000, CFGU + 'symbols.txt')}
+    mods = {'main': (xu + '/arm9/arm9.bin', xe + '/arm9/arm9.bin', 0x02000000, 0x02000000, CFGU + 'symbols.txt')}
     for m in ('itcm', 'dtcm'):
         y = yaml.safe_load(open(xu + '/arm9/%s.yaml' % m))
-        mods[m] = (xu + '/arm9/%s.bin' % m, xe + '/arm9/%s.bin' % m, y['base_address'], CFGU + '%s/symbols.txt' % m)
-    for o in yaml.safe_load(open(xu + '/arm9_overlays/overlays.yaml'))['overlays']:
-        n = 'ov%03d' % o['id']
+        mods[m] = (xu + '/arm9/%s.bin' % m, xe + '/arm9/%s.bin' % m, y['base_address'], y['base_address'], CFGU + '%s/symbols.txt' % m)
+    ovu = yaml.safe_load(open(xu + '/arm9_overlays/overlays.yaml'))['overlays']
+    ove = {o['id']: o for o in yaml.safe_load(open(xe + '/arm9_overlays/overlays.yaml'))['overlays']}
+    for o in ovu:
+        n = 'ov%03d' % o['id']      # the overlays of another version may be loaded at another address
         mods[n] = (xu + '/arm9_overlays/%s.bin' % n, xe + '/arm9_overlays/%s.bin' % n, o['base_address'],
-                   CFGU + 'overlays/%s/symbols.txt' % n)
+                   ove[o['id']]['base_address'], CFGU + 'overlays/%s/symbols.txt' % n)
     return mods
 
 
-def pass1(du, de, base, syms, win=0x3000, thr=0.85):
+def pass1(du, de, base, base_e, syms, win=0x3000, thr=0.85):
     """Functions found by their instructions, searched near where the previous one was."""
     res, delta = {}, 0
     for name, mode, size, addr in syms:
@@ -71,18 +73,18 @@ def pass1(du, de, base, syms, win=0x3000, thr=0.85):
             if sc > bs or (sc == bs and best is not None and abs(o - exp) < abs(best - exp)):
                 bs, best = sc, o
         if best is not None and bs >= thr:
-            res[addr] = best + base; delta = best - o0
+            res[addr] = best + base_e; delta = best - o0
     return res
 
 
-def pass2(du, de, base, syms, res):
+def pass2(du, de, base, base_e, syms, res):
     """The tiny functions that are mostly constants: between their matched neighbours, ignoring the constants."""
     mapped = sorted(res)
     for name, mode, size, addr in syms:
         if addr in res or size < 4 or addr - base + size > len(du):
             continue
         i = bisect.bisect(mapped, addr)
-        exp = (res[mapped[i - 1]] - base + (addr - mapped[i - 1])) if i else addr - base
+        exp = (res[mapped[i - 1]] - base_e + (addr - mapped[i - 1])) if i else addr - base
         fmt, step = ('I', 4) if mode == 'arm' else ('H', 2)
         s = list(struct.unpack_from('<%d%s' % (size // step, fmt), du, addr - base))
         best, bs = None, 0
@@ -95,7 +97,7 @@ def pass2(du, de, base, syms, res):
             if sc > bs or (sc == bs and best is not None and abs(o - exp) < abs(best - exp)):
                 bs, best = sc, o
         if best is not None and bs >= 0.99:
-            res[addr] = best + base; mapped = sorted(res)
+            res[addr] = best + base_e; mapped = sorted(res)
     return res
 
 
@@ -118,11 +120,11 @@ def main():
     out = os.path.join(ROOT, 'config', name)
     mods = modules(xu, xe)
     M, total, missing = {}, 0, 0
-    for n, (u, e, b, sp) in mods.items():
+    for n, (u, e, b, be, sp) in mods.items():
         if not os.path.exists(sp) or not os.path.exists(u):
             continue
         du, de, syms = open(u, 'rb').read(), open(e, 'rb').read(), load_syms(sp)
-        r = pass2(du, de, b, syms, pass1(du, de, b, syms))
+        r = pass2(du, de, b, be, syms, pass1(du, de, b, be, syms))
         M[n] = Map(r)
         total += sum(1 for s in syms if s[2] >= 4); missing += sum(1 for s in syms if s[2] >= 4 and s[3] not in r)
         print('%-6s %5d functions, %d without a match' % (n, len(syms), sum(1 for s in syms if s[2] >= 4 and s[3] not in r)), flush=True)
@@ -133,7 +135,7 @@ def main():
         if n in ('itcm', 'dtcm'): return CFGU + n + '/' + fn, os.path.join(out, 'arm9', n, fn)
         return CFGU + 'overlays/%s/%s' % (n, fn), os.path.join(out, 'arm9', 'overlays', n, fn)
 
-    for n, (u, e, b, sp) in mods.items():
+    for n, (u, e, b, be, sp) in mods.items():
         if n not in M:
             continue
         m = M[n]; syms = load_syms(sp)
@@ -179,9 +181,9 @@ def main():
             mm = re.match(r'^(\w+) ([0-9a-f]{8})(.*)$', line)
             if mm and mm.group(1) in M:
                 mod, a = mm.group(1), int(mm.group(2), 16); na = M[mod].addr(a)
-                u, e, b, sp = mods[mod]
+                u, e, b, be, sp = mods[mod]
                 wu = struct.unpack_from('<I', open(u, 'rb').read(), a - b)[0]
-                we = struct.unpack_from('<I', open(e, 'rb').read(), na - b)[0]
+                we = struct.unpack_from('<I', open(e, 'rb').read(), na - be)[0]
                 same = (wu & 0xFF000000) == (we & 0xFF000000) if (wu >> 25) & 7 == 5 else wu == we
                 if not same:
                     bad += 1; print('CHECK %s %s %08x -> %08x: %08x vs %08x' % (f, mod, a, na, wu, we))

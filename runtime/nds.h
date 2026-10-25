@@ -172,6 +172,7 @@ void card_write(Core* k, uint32_t off, uint32_t v, int size);
 uint32_t card_read_data(Core* k);
 void backup_init(const char* save_path);
 void backup_flush(void);
+int backup_replace(const uint8_t* data, uint32_t n);   /* an imported save takes over; the old one is kept beside it */
 const uint8_t* backup_image(uint32_t* size);   /* the save as the game will see it */
 int backup_unlock_dlc(void);              /* downloadable quests + special guests (see card.c) */
 void math_div(void);

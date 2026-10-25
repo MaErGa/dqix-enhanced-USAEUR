@@ -13,22 +13,110 @@ $AppName = 'Dragon Quest IX'
 $FolderName = 'DQIX-Enhanced'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DQIX-Enhanced'
 
+# ---------------------------------------------------------------- language
+# The texts in this file are English; T gives the Spanish one when Windows is in Spanish.
+# (\n and \uXXXX in the table keep this file plain ASCII.)
+$Lang = 'en'
+try { $Lang = (Get-UICulture).TwoLetterISOLanguageName } catch { }
+$Es = @{
+    'Choose your ROM file (it ends in .nds).' = 'Elige tu archivo ROM (termina en .nds).'
+    'This file can''t be read: {0}' = 'No se puede leer este archivo: {0}'
+    'Dragon Quest IX (USA).' = 'Dragon Quest IX (USA).'
+    'Dragon Quest IX (Europe).' = 'Dragon Quest IX (Europa).'
+    'Dragon Quest IX (Japan). This version isn''t supported yet: it will most likely not build or not run, but you can try.' = 'Dragon Quest IX (Jap\u00f3n). Esta versi\u00f3n a\u00fan no est\u00e1 soportada: lo m\u00e1s probable es que no se compile o no funcione, pero puedes intentarlo.'
+    'This doesn''t look like a Dragon Quest IX ROM (game code ''{0}''). It will most likely not build, but you can try.' = 'Esto no parece una ROM de Dragon Quest IX (c\u00f3digo de juego \u00ab{0}\u00bb). Lo m\u00e1s probable es que no se compile, pero puedes intentarlo.'
+    'Choose a folder.' = 'Elige una carpeta.'
+    'That is not a folder path.' = 'Eso no es una ruta de carpeta.'
+    'Choose a folder, not a whole drive.' = 'Elige una carpeta, no una unidad entera.'
+    'Windows protects this folder: the game couldn''t save there, or update itself. Choose another one, such as your Documents.' = 'Windows protege esta carpeta: el juego no podr\u00eda guardar ah\u00ed ni actualizarse solo. Elige otra, por ejemplo Documentos.'
+    'This drive has only {0} GB free; the game needs about 4 GB while it''s built. Free some space or choose another drive.' = 'Esta unidad solo tiene {0} GB libres; el juego necesita unos 4 GB mientras se compila. Libera espacio o elige otra unidad.'
+    'The game is already installed here: it will be built again, and your saves and settings are kept.' = 'El juego ya est\u00e1 instalado aqu\u00ed: se compilar\u00e1 de nuevo y tus partidas y ajustes se conservan.'
+    'This folder is synced to OneDrive, which would upload about 3 GB of build files. A folder that is not synced is better.' = 'Esta carpeta se sincroniza con OneDrive, que subir\u00eda unos 3 GB de archivos de compilaci\u00f3n. Es mejor una carpeta que no se sincronice.'
+    'Copying the files to {0} failed (robocopy {1}).' = 'No se pudieron copiar los archivos a {0} (robocopy {1}).'
+    'Play Dragon Quest IX' = 'Jugar a Dragon Quest IX'
+    'The folder with your save file, settings and bug reports' = 'La carpeta con tu partida guardada, ajustes e informes de error'
+    'Remove {0} from this PC' = 'Quitar {0} de este PC'
+    'Compiled {0} of about {1} parts' = 'Compiladas {0} de unas {1} partes'
+    'Setup hit a problem: {0}\n\nRun BUILD.bat instead, or send this message with a bug report.' = 'La instalaci\u00f3n ha tenido un problema: {0}\n\nEjecuta BUILD.bat en su lugar, o env\u00eda este mensaje con un informe de error.'
+    'Dragon Quest IX - Setup' = 'Dragon Quest IX - Instalaci\u00f3n'
+    '{0} - Setup' = '{0} - Instalaci\u00f3n'
+    '< Back' = '< Atr\u00e1s'
+    'Next >' = 'Siguiente >'
+    'Cancel' = 'Cancelar'
+    'Install' = 'Instalar'
+    'Try again' = 'Reintentar'
+    'Play now' = 'Jugar ahora'
+    'Close' = 'Cerrar'
+    'Welcome to {0} for PC' = 'Bienvenido a {0} para PC'
+    'This setup turns your own copy of the game into a PC game.' = 'Este instalador convierte tu propia copia del juego en un juego de PC.'
+    'You''ll need:\n  - a copy (ROM, a .nds file) of your own Dragon Quest IX cartridge (the USA or European version)\n  - an internet connection, and about 4 GB of free space\n  - 10 to 20 minutes the first time (the build tools are installed once)' = 'Necesitar\u00e1s:\n  - una copia (ROM, un archivo .nds) de tu propio cartucho de Dragon Quest IX (versi\u00f3n USA o europea)\n  - conexi\u00f3n a internet y unos 4 GB de espacio libre\n  - de 10 a 20 minutos la primera vez (las herramientas de compilaci\u00f3n se instalan una sola vez)'
+    'What happens: you choose your ROM and where to put the game, then setup downloads free build tools (MSYS2) and builds the game from your ROM, right here on your PC. Nothing from the game is downloaded: everything comes from your own cartridge.' = 'Qu\u00e9 ocurre: eliges tu ROM y d\u00f3nde poner el juego; despu\u00e9s se descargan herramientas de compilaci\u00f3n gratuitas (MSYS2) y se compila el juego a partir de tu ROM, aqu\u00ed mismo en tu PC. No se descarga nada del juego: todo sale de tu propio cartucho.'
+    'Windows may ask for permission to install the build tools: choose Yes.' = 'Windows puede pedir permiso para instalar las herramientas de compilaci\u00f3n: elige S\u00ed.'
+    'Your Dragon Quest IX ROM' = 'Tu ROM de Dragon Quest IX'
+    'Choose the .nds file made from your cartridge, or drag it into this window.' = 'Elige el archivo .nds hecho a partir de tu cartucho, o arr\u00e1stralo a esta ventana.'
+    'ROM file:' = 'Archivo ROM:'
+    'Browse...' = 'Examinar...'
+    'Checking the file...' = 'Comprobando el archivo...'
+    'DS ROM (*.nds)|*.nds|All files (*.*)|*.*' = 'ROM de DS (*.nds)|*.nds|Todos los archivos (*.*)|*.*'
+    'Choose your Dragon Quest IX ROM' = 'Elige tu ROM de Dragon Quest IX'
+    'Only a ROM you made from your own cartridge. It''s copied into the game''s folder, so updates can rebuild the game later.' = 'Solo una ROM hecha a partir de tu propio cartucho. Se copia a la carpeta del juego, para que las actualizaciones puedan volver a compilarlo.'
+    'Where to put the game' = 'D\u00f3nde poner el juego'
+    'The game, its saves and settings all live in this folder.' = 'El juego, sus partidas guardadas y sus ajustes viven en esta carpeta.'
+    'Folder:' = 'Carpeta:'
+    'Change...' = 'Cambiar...'
+    'Use {0} instead' = 'Usar {0} en su lugar'
+    'Choose where to put the game (a folder called DQIX-Enhanced is made inside it).' = 'Elige d\u00f3nde poner el juego (dentro se crea una carpeta llamada DQIX-Enhanced).'
+    'Shortcuts' = 'Accesos directos'
+    'How you start the game.' = 'C\u00f3mo inicias el juego.'
+    'A shortcut on the desktop' = 'Un acceso directo en el escritorio'
+    'In the Start menu (with your save folder and Uninstall)' = 'En el men\u00fa Inicio (con tu carpeta de partidas y Desinstalar)'
+    'It also appears in Settings > Apps, where it can be uninstalled like any program.\n\nReady? Setup will now copy the files to:\n  {0}\nand build the game. The first time takes 10 to 20 minutes.' = 'Tambi\u00e9n aparece en Configuraci\u00f3n > Aplicaciones, donde se puede desinstalar como cualquier programa.\n\n\u00bfListo? Ahora se copiar\u00e1n los archivos a:\n  {0}\ny se compilar\u00e1 el juego. La primera vez tarda de 10 a 20 minutos.'
+    'Checking your ROM' = 'Comprobando tu ROM'
+    'Build tools (installed once)' = 'Herramientas de compilaci\u00f3n (se instalan una vez)'
+    'Recompiling the game' = 'Recompilando el juego'
+    'Compiling' = 'Compilando'
+    'Finishing' = 'Terminando'
+    'Installing' = 'Instalando'
+    'This takes a while the first time. You can leave it running.' = 'La primera vez tarda un rato. Puedes dejarlo funcionando.'
+    'Show details' = 'Mostrar detalles'
+    'Setup couldn''t copy the files: {0}' = 'La instalaci\u00f3n no pudo copiar los archivos: {0}'
+    'The build stopped. The details below say why; the whole log is in {0}.' = 'La compilaci\u00f3n se ha detenido. Los detalles de abajo dicen por qu\u00e9; el registro completo est\u00e1 en {0}.'
+    'Something went wrong.' = 'Algo ha salido mal.'
+    '{0} is ready!' = '\u00a1{0} est\u00e1 listo!'
+    'Have fun on your adventure.' = 'Que disfrutes de tu aventura.'
+    'the desktop' = 'el escritorio'
+    'the Start menu' = 'el men\u00fa Inicio'
+    'Start it with the button below' = 'In\u00edcialo con el bot\u00f3n de abajo'
+    ', or later from ' = ', o m\u00e1s tarde desde '
+    ' or ' = ' o '
+    'Tip: to pin it to the taskbar or to Start, right-click the Dragon Quest IX shortcut and choose "Pin to taskbar" or "Pin to Start". (Windows only lets you do that yourself.)' = 'Consejo: para anclarlo a la barra de tareas o a Inicio, haz clic derecho en el acceso directo de Dragon Quest IX y elige \u00abAnclar a la barra de tareas\u00bb o \u00abAnclar a Inicio\u00bb. (Windows solo te deja hacerlo a ti.)'
+    'Your saves and settings are in {0}. Updates come from inside the game: Help > Check for updates.' = 'Tus partidas guardadas y ajustes est\u00e1n en {0}. Las actualizaciones se hacen desde dentro del juego: Ayuda > Buscar actualizaciones.'
+    'If you downloaded a zip to get this setup, you can delete it and the folder you unpacked: the game is installed now.' = 'Si descargaste un zip para obtener este instalador, puedes borrarlo junto con la carpeta que descomprimiste: el juego ya est\u00e1 instalado.'
+    'Stop setup? The game is not finished yet; you can run setup again later.' = '\u00bfParar la instalaci\u00f3n? El juego a\u00fan no est\u00e1 terminado; puedes volver a ejecutarla m\u00e1s tarde.'
+}
+function T([string]$Text) {
+    if ($Lang -ne 'es') { return $Text }
+    $k = $Text.Replace("`r`n", '\n').Replace("`n", '\n')
+    if ($Es.ContainsKey($k)) { return [regex]::Unescape($Es[$k]) }
+    return $Text
+}
+
 # ---------------------------------------------------------------- checks (no window needed)
 
 # Which ROM is this? Returns @{ Ok; Warn; Text }. Any readable file can be
 # tried: the USA and European versions work; the Japanese one doesn't yet, so it gets a warning.
 function Test-Rom([string]$Path) {
-    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @{ Ok = $false; Warn = $false; Text = 'Choose your ROM file (it ends in .nds).' } }
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @{ Ok = $false; Warn = $false; Text = (T 'Choose your ROM file (it ends in .nds).') } }
     $code = ''
     try {
         $fs = [IO.File]::OpenRead($Path)
         try { $buf = New-Object byte[] 16; [void]$fs.Read($buf, 0, 16); $code = [Text.Encoding]::ASCII.GetString($buf, 12, 4) -replace '[^A-Za-z0-9]', '' } finally { $fs.Close() }
-    } catch { return @{ Ok = $false; Warn = $false; Text = "This file can't be read: $($_.Exception.Message)" } }
+    } catch { return @{ Ok = $false; Warn = $false; Text = ((T 'This file can''t be read: {0}') -f $_.Exception.Message) } }
     switch ($code) {
-        'YDQE' { return @{ Ok = $true; Warn = $false; Text = 'Dragon Quest IX (USA).' } }
-        'YDQJ' { return @{ Ok = $true; Warn = $true; Text = "Dragon Quest IX (Japan). This version isn't supported yet: it will most likely not build or not run, but you can try." } }
-        'YDQP' { return @{ Ok = $true; Warn = $false; Text = 'Dragon Quest IX (Europe).' } }
-        default { return @{ Ok = $true; Warn = $true; Text = "This doesn't look like a Dragon Quest IX ROM (game code '$code'). It will most likely not build, but you can try." } }
+        'YDQE' { return @{ Ok = $true; Warn = $false; Text = (T 'Dragon Quest IX (USA).') } }
+        'YDQJ' { return @{ Ok = $true; Warn = $true; Text = (T 'Dragon Quest IX (Japan). This version isn''t supported yet: it will most likely not build or not run, but you can try.') } }
+        'YDQP' { return @{ Ok = $true; Warn = $false; Text = (T 'Dragon Quest IX (Europe).') } }
+        default { return @{ Ok = $true; Warn = $true; Text = ((T 'This doesn''t look like a Dragon Quest IX ROM (game code ''{0}''). It will most likely not build, but you can try.') -f $code) } }
     }
 }
 
@@ -44,13 +132,13 @@ function Test-Under([string]$Path, [string]$Root) {
 # Can the game live here? Returns @{ Ok; Text; OneDrive; Existing }.
 function Test-Folder([string]$Path) {
     $r = @{ Ok = $true; Text = ''; OneDrive = $false; Existing = $false }
-    if (-not $Path) { $r.Ok = $false; $r.Text = 'Choose a folder.'; return $r }
-    try { $full = [IO.Path]::GetFullPath($Path) } catch { $r.Ok = $false; $r.Text = 'That is not a folder path.'; return $r }
-    if ($full.TrimEnd('\').Length -le 3) { $r.Ok = $false; $r.Text = 'Choose a folder, not a whole drive.'; return $r }
+    if (-not $Path) { $r.Ok = $false; $r.Text = (T 'Choose a folder.'); return $r }
+    try { $full = [IO.Path]::GetFullPath($Path) } catch { $r.Ok = $false; $r.Text = (T 'That is not a folder path.'); return $r }
+    if ($full.TrimEnd('\').Length -le 3) { $r.Ok = $false; $r.Text = (T 'Choose a folder, not a whole drive.'); return $r }
     foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432, $env:windir, $env:ProgramData)) {
         if (Test-Under $full $root) {
             $r.Ok = $false
-            $r.Text = "Windows protects this folder: the game couldn't save there, or update itself. Choose another one, such as your Documents."
+            $r.Text = (T 'Windows protects this folder: the game couldn''t save there, or update itself. Choose another one, such as your Documents.')
             return $r
         }
     }
@@ -62,13 +150,13 @@ function Test-Folder([string]$Path) {
         $drive = New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($full))
         $freeGB = [math]::Round($drive.AvailableFreeSpace / 1GB, 1)
         if ($drive.AvailableFreeSpace -lt 4GB -and -not $r.Existing) {
-            $r.Ok = $false; $r.Text = "This drive has only $freeGB GB free; the game needs about 4 GB while it's built. Free some space or choose another drive."
+            $r.Ok = $false; $r.Text = ((T 'This drive has only {0} GB free; the game needs about 4 GB while it''s built. Free some space or choose another drive.') -f $freeGB)
             return $r
         }
     } catch { }
     $notes = @()
-    if ($r.Existing) { $notes += 'The game is already installed here: it will be built again, and your saves and settings are kept.' }
-    if ($r.OneDrive) { $notes += 'This folder is synced to OneDrive, which would upload about 3 GB of build files. A folder that is not synced is better.' }
+    if ($r.Existing) { $notes += (T 'The game is already installed here: it will be built again, and your saves and settings are kept.') }
+    if ($r.OneDrive) { $notes += (T 'This folder is synced to OneDrive, which would upload about 3 GB of build files. A folder that is not synced is better.') }
     $r.Text = ($notes -join ' ')
     return $r
 }
@@ -89,7 +177,7 @@ function Copy-Project([string]$Dest) {
     if ($src -ieq $dst) { return }
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
     & robocopy.exe $src $dst /E /XD .git build game update /XF last-rom.txt /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "Copying the files to $dst failed (robocopy $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ge 8) { throw ((T 'Copying the files to {0} failed (robocopy {1}).') -f $dst, $LASTEXITCODE) }
 }
 
 function Copy-Rom([string]$Rom, [string]$Dest) {
@@ -123,15 +211,15 @@ function Add-Shortcuts([string]$Dest, [bool]$Desktop, [bool]$StartMenu) {
     $exe = Join-Path $game 'dqix.exe'
     $icon = "$exe,0"
     if ($Desktop) {
-        New-Shortcut (Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName.lnk") $exe '' $game $icon 'Play Dragon Quest IX'
+        New-Shortcut (Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName.lnk") $exe '' $game $icon (T 'Play Dragon Quest IX')
     }
     if ($StartMenu) {
         $sm = Get-StartMenuFolder
         New-Item -ItemType Directory -Force -Path $sm | Out-Null
-        New-Shortcut (Join-Path $sm "$AppName.lnk") $exe '' $game $icon 'Play Dragon Quest IX'
-        New-Shortcut (Join-Path $sm 'Save files.lnk') $game '' $game '' 'The folder with your save file, settings and bug reports'
+        New-Shortcut (Join-Path $sm "$AppName.lnk") $exe '' $game $icon (T 'Play Dragon Quest IX')
+        New-Shortcut (Join-Path $sm 'Save files.lnk') $game '' $game '' (T 'The folder with your save file, settings and bug reports')
         $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        New-Shortcut (Join-Path $sm "Uninstall $AppName.lnk") $ps "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Dest 'tools\uninstall.ps1')`"" $Dest '' "Remove $AppName from this PC"
+        New-Shortcut (Join-Path $sm "Uninstall $AppName.lnk") $ps "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Dest 'tools\uninstall.ps1')`"" $Dest '' ((T 'Remove {0} from this PC') -f $AppName)
     }
 }
 
@@ -171,7 +259,7 @@ function Read-Progress([string]$Log) {
         if ($line -match '^(== |ROM: |Installing |Checking |   [A-Z])') { $p.Line = $line.Trim().TrimStart('=', ' ') }
     }
     $p.Percent = [math]::Min(99, [int](100 * $p.Compiled / $CompileEstimate))
-    if ($p.Step -eq 3 -and $p.Compiled) { $p.Line = "Compiled $($p.Compiled) of about $CompileEstimate parts" }
+    if ($p.Step -eq 3 -and $p.Compiled) { $p.Line = ((T 'Compiled {0} of about {1} parts') -f $p.Compiled, $CompileEstimate) }
     return $p
 }
 
@@ -183,12 +271,12 @@ Add-Type -AssemblyName System.Drawing
 try { Add-Type -Name Dpi -Namespace Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'; [void][Native.Dpi]::SetProcessDPIAware() } catch { }
 [System.Windows.Forms.Application]::EnableVisualStyles()
 trap {
-    [void][System.Windows.Forms.MessageBox]::Show("Setup hit a problem: $($_.Exception.Message)`n`nRun BUILD.bat instead, or send this message with a bug report.", 'Dragon Quest IX - Setup', 'OK', 'Error')
+    [void][System.Windows.Forms.MessageBox]::Show(((T "Setup hit a problem: {0}`n`nRun BUILD.bat instead, or send this message with a bug report.") -f $_.Exception.Message), (T 'Dragon Quest IX - Setup'), 'OK', 'Error')
     exit 1
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "$AppName - Setup"
+$form.Text = ((T '{0} - Setup') -f $AppName)
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 $g = $form.CreateGraphics(); $scale = $g.DpiX / 96.0; $g.Dispose()
 function S([double]$n) { return [int]($n * $scale) }
@@ -213,9 +301,9 @@ $body = New-Object System.Windows.Forms.Panel
 $body.SetBounds((S 20), (S 85), (S 600), (S 320))
 $form.Controls.Add($body)
 
-$btnBack = New-Object System.Windows.Forms.Button; $btnBack.Text = '< Back'; $btnBack.SetBounds((S 330), (S 425), (S 90), (S 30))
-$btnNext = New-Object System.Windows.Forms.Button; $btnNext.Text = 'Next >'; $btnNext.SetBounds((S 425), (S 425), (S 100), (S 30))
-$btnCancel = New-Object System.Windows.Forms.Button; $btnCancel.Text = 'Cancel'; $btnCancel.SetBounds((S 530), (S 425), (S 90), (S 30))
+$btnBack = New-Object System.Windows.Forms.Button; $btnBack.Text = (T '< Back'); $btnBack.SetBounds((S 330), (S 425), (S 90), (S 30))
+$btnNext = New-Object System.Windows.Forms.Button; $btnNext.Text = (T 'Next >'); $btnNext.SetBounds((S 425), (S 425), (S 100), (S 30))
+$btnCancel = New-Object System.Windows.Forms.Button; $btnCancel.Text = (T 'Cancel'); $btnCancel.SetBounds((S 530), (S 425), (S 90), (S 30))
 $form.Controls.AddRange(@($btnBack, $btnNext, $btnCancel))
 $form.AcceptButton = $btnNext
 
@@ -230,32 +318,32 @@ $state = @{ Page = 0; Rom = ''; RomOk = $false; Folder = (Get-DefaultFolder); De
 
 # ---- pages
 function Show-Welcome {
-    $title.Text = "Welcome to $AppName for PC"
-    $subtitle.Text = 'This setup turns your own copy of the game into a PC game.'
-    [void](New-Label ("You'll need:`n" +
+    $title.Text = ((T 'Welcome to {0} for PC') -f $AppName)
+    $subtitle.Text = (T 'This setup turns your own copy of the game into a PC game.')
+    [void](New-Label (T ("You'll need:`n" +
         "  - a copy (ROM, a .nds file) of your own Dragon Quest IX cartridge (the USA or European version)`n" +
         "  - an internet connection, and about 4 GB of free space`n" +
-        "  - 10 to 20 minutes the first time (the build tools are installed once)") 0 (S 100))
-    [void](New-Label ("What happens: you choose your ROM and where to put the game, then setup downloads free build " +
+        "  - 10 to 20 minutes the first time (the build tools are installed once)")) 0 (S 100))
+    [void](New-Label (T ("What happens: you choose your ROM and where to put the game, then setup downloads free build " +
         "tools (MSYS2) and builds the game from your ROM, right here on your PC. Nothing from the game is downloaded: " +
-        "everything comes from your own cartridge.") (S 110) (S 80))
-    [void](New-Label "Windows may ask for permission to install the build tools: choose Yes." (S 200) (S 40))
-    $btnBack.Enabled = $false; $btnNext.Text = 'Next >'; $btnNext.Enabled = $true
+        "everything comes from your own cartridge.")) (S 110) (S 80))
+    [void](New-Label (T 'Windows may ask for permission to install the build tools: choose Yes.') (S 200) (S 40))
+    $btnBack.Enabled = $false; $btnNext.Text = (T 'Next >'); $btnNext.Enabled = $true
 }
 
 function Show-Rom {
-    $title.Text = 'Your Dragon Quest IX ROM'
-    $subtitle.Text = 'Choose the .nds file made from your cartridge, or drag it into this window.'
-    [void](New-Label 'ROM file:' 0 (S 24) -Bold)
+    $title.Text = (T 'Your Dragon Quest IX ROM')
+    $subtitle.Text = (T 'Choose the .nds file made from your cartridge, or drag it into this window.')
+    [void](New-Label (T 'ROM file:') 0 (S 24) -Bold)
     $box = New-Object System.Windows.Forms.TextBox; $box.SetBounds(0, (S 28), (S 480), (S 26)); $box.ReadOnly = $true; $box.Text = $state.Rom
     $body.Controls.Add($box)
-    $browse = New-Object System.Windows.Forms.Button; $browse.Text = 'Browse...'; $browse.SetBounds((S 490), (S 26), (S 110), (S 30))
+    $browse = New-Object System.Windows.Forms.Button; $browse.Text = (T 'Browse...'); $browse.SetBounds((S 490), (S 26), (S 110), (S 30))
     $body.Controls.Add($browse)
     $status = New-Label '' (S 70) (S 90)
     $check = {
         param($path)
         $state.Rom = $path; $box.Text = $path
-        $status.ForeColor = 'Black'; $status.Text = 'Checking the file...'; $form.Refresh()
+        $status.ForeColor = 'Black'; $status.Text = (T 'Checking the file...'); $form.Refresh()
         $r = Test-Rom $path
         $state.RomOk = $r.Ok
         $status.Text = $r.Text
@@ -264,22 +352,22 @@ function Show-Rom {
     }.GetNewClosure()
     $browse.Add_Click({
         $d = New-Object System.Windows.Forms.OpenFileDialog
-        $d.Filter = 'DS ROM (*.nds)|*.nds|All files (*.*)|*.*'; $d.Title = 'Choose your Dragon Quest IX ROM'
+        $d.Filter = (T 'DS ROM (*.nds)|*.nds|All files (*.*)|*.*'); $d.Title = (T 'Choose your Dragon Quest IX ROM')
         if ($d.ShowDialog($form) -eq 'OK') { & $check $d.FileName }
     }.GetNewClosure())
     $script:dropCheck = $check
-    [void](New-Label "Only a ROM you made from your own cartridge. It's copied into the game's folder, so updates can rebuild the game later." (S 170) (S 50))
-    $btnBack.Enabled = $true; $btnNext.Text = 'Next >'; $btnNext.Enabled = $state.RomOk
+    [void](New-Label (T "Only a ROM you made from your own cartridge. It's copied into the game's folder, so updates can rebuild the game later.") (S 170) (S 50))
+    $btnBack.Enabled = $true; $btnNext.Text = (T 'Next >'); $btnNext.Enabled = $state.RomOk
     if ($state.Rom) { & $check $state.Rom }
 }
 
 function Show-Folder {
-    $title.Text = 'Where to put the game'
-    $subtitle.Text = 'The game, its saves and settings all live in this folder.'
-    [void](New-Label 'Folder:' 0 (S 24) -Bold)
+    $title.Text = (T 'Where to put the game')
+    $subtitle.Text = (T 'The game, its saves and settings all live in this folder.')
+    [void](New-Label (T 'Folder:') 0 (S 24) -Bold)
     $box = New-Object System.Windows.Forms.TextBox; $box.SetBounds(0, (S 28), (S 480), (S 26)); $box.Text = $state.Folder
     $body.Controls.Add($box)
-    $change = New-Object System.Windows.Forms.Button; $change.Text = 'Change...'; $change.SetBounds((S 490), (S 26), (S 110), (S 30))
+    $change = New-Object System.Windows.Forms.Button; $change.Text = (T 'Change...'); $change.SetBounds((S 490), (S 26), (S 110), (S 30))
     $body.Controls.Add($change)
     $status = New-Label '' (S 70) (S 90)
     $alt = New-Object System.Windows.Forms.Button; $alt.SetBounds(0, (S 165), (S 400), (S 30)); $alt.Visible = $false
@@ -290,38 +378,37 @@ function Show-Folder {
         $status.Text = $r.Text
         if (-not $r.Ok) { $status.ForeColor = [System.Drawing.Color]::DarkRed } elseif ($r.OneDrive) { $status.ForeColor = [System.Drawing.Color]::DarkOrange } else { $status.ForeColor = 'Black' }
         $alt.Visible = $r.Ok -and $r.OneDrive
-        $alt.Text = "Use $(Get-LocalFolder) instead"
+        $alt.Text = ((T 'Use {0} instead') -f (Get-LocalFolder))
         $btnNext.Enabled = $r.Ok
     }.GetNewClosure()
     $box.Add_TextChanged($validate)
     $change.Add_Click({
         $d = New-Object System.Windows.Forms.FolderBrowserDialog
-        $d.Description = 'Choose where to put the game (a folder called DQIX-Enhanced is made inside it).'
+        $d.Description = (T 'Choose where to put the game (a folder called DQIX-Enhanced is made inside it).')
         $d.ShowNewFolderButton = $true
         if ($d.ShowDialog($form) -eq 'OK') { $box.Text = Resolve-PickedFolder $d.SelectedPath }
     }.GetNewClosure())
     $alt.Add_Click({ $box.Text = Get-LocalFolder }.GetNewClosure())
-    $btnBack.Enabled = $true; $btnNext.Text = 'Next >'
+    $btnBack.Enabled = $true; $btnNext.Text = (T 'Next >')
     & $validate
 }
 
 function Show-Shortcuts {
-    $title.Text = 'Shortcuts'
-    $subtitle.Text = 'How you start the game.'
-    $c1 = New-Object System.Windows.Forms.CheckBox; $c1.Text = 'A shortcut on the desktop'; $c1.SetBounds(0, 0, (S 600), (S 28)); $c1.Checked = $state.Desktop
-    $c2 = New-Object System.Windows.Forms.CheckBox; $c2.Text = 'In the Start menu (with your save folder and Uninstall)'; $c2.SetBounds(0, (S 32), (S 600), (S 28)); $c2.Checked = $state.StartMenu
+    $title.Text = (T 'Shortcuts')
+    $subtitle.Text = (T 'How you start the game.')
+    $c1 = New-Object System.Windows.Forms.CheckBox; $c1.Text = (T 'A shortcut on the desktop'); $c1.SetBounds(0, 0, (S 600), (S 28)); $c1.Checked = $state.Desktop
+    $c2 = New-Object System.Windows.Forms.CheckBox; $c2.Text = (T 'In the Start menu (with your save folder and Uninstall)'); $c2.SetBounds(0, (S 32), (S 600), (S 28)); $c2.Checked = $state.StartMenu
     $c1.Add_CheckedChanged({ $state.Desktop = $c1.Checked }.GetNewClosure())
     $c2.Add_CheckedChanged({ $state.StartMenu = $c2.Checked }.GetNewClosure())
     $body.Controls.AddRange(@($c1, $c2))
-    [void](New-Label ("It also appears in Settings > Apps, where it can be uninstalled like any program.`n`n" +
-        "Ready? Setup will now copy the files to:`n  $($state.Folder)`nand build the game. The first time takes 10 to 20 minutes.") (S 80) (S 120))
-    $btnBack.Enabled = $true; $btnNext.Text = 'Install'; $btnNext.Enabled = $true
+    [void](New-Label ((T "It also appears in Settings > Apps, where it can be uninstalled like any program.`n`nReady? Setup will now copy the files to:`n  {0}`nand build the game. The first time takes 10 to 20 minutes.") -f $state.Folder) (S 80) (S 120))
+    $btnBack.Enabled = $true; $btnNext.Text = (T 'Install'); $btnNext.Enabled = $true
 }
 
-$steps = @('Checking your ROM', 'Build tools (installed once)', 'Recompiling the game', 'Compiling', 'Finishing')
+$steps = @((T 'Checking your ROM'), (T 'Build tools (installed once)'), (T 'Recompiling the game'), (T 'Compiling'), (T 'Finishing'))
 function Show-Install {
-    $title.Text = 'Installing'
-    $subtitle.Text = 'This takes a while the first time. You can leave it running.'
+    $title.Text = (T 'Installing')
+    $subtitle.Text = (T 'This takes a while the first time. You can leave it running.')
     $script:stepLabels = @()
     for ($i = 0; $i -lt $steps.Count; $i++) {
         $l = New-Label ("     " + $steps[$i]) ((S 30) * $i) (S 26)
@@ -336,10 +423,10 @@ function Show-Install {
     $details.Multiline = $true; $details.ScrollBars = 'Vertical'; $details.ReadOnly = $true; $details.SetBounds(0, (S 215), (S 600), (S 105)); $details.Visible = $false
     $details.Font = New-Object System.Drawing.Font('Consolas', 8)
     $body.Controls.Add($details)
-    $show = New-Object System.Windows.Forms.LinkLabel; $show.Text = 'Show details'; $show.SetBounds((S 480), (S 188), (S 120), (S 22)); $show.TextAlign = 'TopRight'
+    $show = New-Object System.Windows.Forms.LinkLabel; $show.Text = (T 'Show details'); $show.SetBounds((S 480), (S 188), (S 120), (S 22)); $show.TextAlign = 'TopRight'
     $show.Add_LinkClicked({ $details.Visible = -not $details.Visible }.GetNewClosure())
     $body.Controls.Add($show)
-    $btnBack.Enabled = $false; $btnNext.Enabled = $false; $btnNext.Text = 'Next >'
+    $btnBack.Enabled = $false; $btnNext.Enabled = $false; $btnNext.Text = (T 'Next >')
     $form.Refresh()
     Start-Install
 }
@@ -363,7 +450,7 @@ function Start-Install {
         Unblock-Everything $dest
     } catch {
         Set-Step 0 -Failed
-        Show-Failed "Setup couldn't copy the files: $($_.Exception.Message)"
+        Show-Failed ((T 'Setup couldn''t copy the files: {0}') -f $_.Exception.Message)
         return
     }
     $state.LogPath = Join-Path $dest 'setup-log.txt'
@@ -412,38 +499,38 @@ function Update-Install {
             Show-Page 5
         } else {
             Set-Step $p.Step -Failed
-            Show-Failed "The build stopped. The details below say why; the whole log is in $($state.LogPath)."
+            Show-Failed ((T 'The build stopped. The details below say why; the whole log is in {0}.') -f $state.LogPath)
         }
     }
 }
 
 function Show-Failed([string]$Message) {
-    $subtitle.Text = 'Something went wrong.'
+    $subtitle.Text = (T 'Something went wrong.')
     $lastLine.Text = $Message; $lastLine.ForeColor = [System.Drawing.Color]::DarkRed
     $lastLine.SetBounds(0, (S 188), (S 600), (S 44))
     $details.Visible = $true; $details.SetBounds(0, (S 235), (S 600), (S 85))
     $details.Text = ((Read-Log) -split "`r?`n" | Select-Object -Last 200) -join "`r`n"
     $details.SelectionStart = $details.TextLength; $details.ScrollToCaret()
-    $btnNext.Text = 'Try again'; $btnNext.Enabled = $true
-    $btnCancel.Text = 'Close'
+    $btnNext.Text = (T 'Try again'); $btnNext.Enabled = $true
+    $btnCancel.Text = (T 'Close')
     $state.Failed = $true
 }
 
 function Show-Done {
-    $title.Text = "$AppName is ready!"
-    $subtitle.Text = 'Have fun on your adventure.'
+    $title.Text = ((T '{0} is ready!') -f $AppName)
+    $subtitle.Text = (T 'Have fun on your adventure.')
     $where = @()
-    if ($state.Desktop) { $where += 'the desktop' }
-    if ($state.StartMenu) { $where += 'the Start menu' }
-    $start = 'Start it with the button below'
-    if ($where.Count) { $start += ', or later from ' + ($where -join ' or ') }
+    if ($state.Desktop) { $where += (T 'the desktop') }
+    if ($state.StartMenu) { $where += (T 'the Start menu') }
+    $start = (T 'Start it with the button below')
+    if ($where.Count) { $start += (T ', or later from ') + ($where -join (T ' or ')) }
     [void](New-Label "$start." 0 (S 30))
-    [void](New-Label 'Tip: to pin it to the taskbar or to Start, right-click the Dragon Quest IX shortcut and choose "Pin to taskbar" or "Pin to Start". (Windows only lets you do that yourself.)' (S 40) (S 60))
-    [void](New-Label "Your saves and settings are in $(Join-Path $state.Folder 'game'). Updates come from inside the game: Help > Check for updates." (S 110) (S 60))
-    [void](New-Label 'If you downloaded a zip to get this setup, you can delete it and the folder you unpacked: the game is installed now.' (S 180) (S 50))
+    [void](New-Label (T 'Tip: to pin it to the taskbar or to Start, right-click the Dragon Quest IX shortcut and choose "Pin to taskbar" or "Pin to Start". (Windows only lets you do that yourself.)') (S 40) (S 60))
+    [void](New-Label ((T 'Your saves and settings are in {0}. Updates come from inside the game: Help > Check for updates.') -f (Join-Path $state.Folder 'game')) (S 110) (S 60))
+    [void](New-Label (T 'If you downloaded a zip to get this setup, you can delete it and the folder you unpacked: the game is installed now.') (S 180) (S 50))
     $btnBack.Enabled = $false
-    $btnNext.Text = 'Play now'; $btnNext.Enabled = $true
-    $btnCancel.Text = 'Close'
+    $btnNext.Text = (T 'Play now'); $btnNext.Enabled = $true
+    $btnCancel.Text = (T 'Close')
 }
 
 function Show-Page([int]$Page) {
@@ -459,14 +546,14 @@ $btnNext.Add_Click({
         Start-Process -FilePath (Join-Path $game 'dqix.exe') -WorkingDirectory $game
         $form.Close(); return
     }
-    if ($state.Page -eq 4 -and $state.Failed) { $state.Failed = $false; $btnCancel.Text = 'Cancel'; Show-Page 4; return }
+    if ($state.Page -eq 4 -and $state.Failed) { $state.Failed = $false; $btnCancel.Text = (T 'Cancel'); Show-Page 4; return }
     if ($state.Page -lt 4) { Show-Page ($state.Page + 1) }
 })
 $btnCancel.Add_Click({ $form.Close() })
 $form.Add_FormClosing({
     param($s, $e)
     if ($state.Proc -and -not $state.Proc.HasExited) {
-        $a = [System.Windows.Forms.MessageBox]::Show($form, 'Stop setup? The game is not finished yet; you can run setup again later.', $AppName, 'YesNo', 'Question')
+        $a = [System.Windows.Forms.MessageBox]::Show($form, (T 'Stop setup? The game is not finished yet; you can run setup again later.'), $AppName, 'YesNo', 'Question')
         if ($a -ne 'Yes') { $e.Cancel = $true; return }
         try { & taskkill.exe /T /F /PID $state.Proc.Id | Out-Null } catch { }
     }

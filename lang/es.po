@@ -144,6 +144,9 @@ msgstr "A&nfitrión: tus amigos se unen a ti..."
 msgid "&How does this work?"
 msgstr "¿Có&mo funciona esto?"
 
+msgid "&Import a save..."
+msgstr "I&mportar una partida..."
+
 msgid "&Integer scaling"
 msgstr "Escalado e&ntero"
 
@@ -203,6 +206,9 @@ msgstr "&Suavizar texturas (Mejorado)"
 
 msgid "&Start now (everyone is here)\tEnter"
 msgstr "&Empezar ya (todos están aquí)\tEnter"
+
+msgid "&Unlimited"
+msgstr "&Sin límite"
 
 msgid "&Unlock all downloadable content now (without Sellma)"
 msgstr "&Desbloquear ahora todo el contenido descargable (sin Sellma)"
@@ -426,6 +432,9 @@ msgstr "No enviar"
 msgid "Downloadable content"
 msgstr "Contenido descargable"
 
+msgid "Drag a save file onto the game window: a .sav, .dsv or .duc from DeSmuME or another emulator. The game checks it, keeps your current save in its folder, and restarts with the new one."
+msgstr "Arrastra un archivo de partida a la ventana del juego: un .sav, .dsv o .duc de DeSmuME u otro emulador. El juego lo comprueba, conserva tu partida actual en su carpeta y se reinicia con la nueva."
+
 msgid "Dragon Quest IX %s is available (you have %s).\n\nUpdate now?%s"
 msgstr "Dragon Quest IX %s está disponible (tienes %s).\n\n¿Actualizar ahora?%s"
 
@@ -467,6 +476,12 @@ msgstr "Intro: empezar (todos están aquí)    Esc: cancelar"
 
 msgid "Esc: back (the game restarts on its own)."
 msgstr "Esc: volver (el juego se reinicia solo)."
+
+msgid "Export save"
+msgstr "Exportar partida"
+
+msgid "Export the s&ave to a file"
+msgstr "Exportar la partida a un arc&hivo"
 
 msgid "Fast forward (hold)"
 msgstr "Avance rápido (mantener)"
@@ -524,6 +539,12 @@ msgstr "Crear una sesión: tus amigos se unen a ti (hasta 3)."
 
 msgid "Ice Blue"
 msgstr "Azul hielo"
+
+msgid "Import"
+msgstr "Importar"
+
+msgid "Import save"
+msgstr "Importar partida"
 
 msgid "In its own &window (a clean field)"
 msgstr "En su propia &ventana (campo despejado)"
@@ -609,6 +630,9 @@ msgstr "Sin cambios"
 msgid "Not while playing with friends: it would leave them out of step. Leave the session first (Wireless menu)."
 msgstr "No mientras juegas con amigos: los dejaría descoordinados. Sal antes de la sesión (menú Inalámbrico)."
 
+msgid "Not while playing with friends: the game restarts. Leave the session first (Wireless menu)."
+msgstr "No mientras juegas con amigos: el juego se reinicia. Sal antes de la sesión (menú Inalámbrico)."
+
 msgid "OUT OF SYNC with %s at frame %llu: the PCs no longer agree. Leave and start a new session."
 msgstr "SIN SINCRONIZAR con %s en el fotograma %llu: los PC ya no coinciden. Sal y empieza una sesión nueva."
 
@@ -653,6 +677,9 @@ msgstr "Pulsa una tecla para: %s (Esc cancela)"
 
 msgid "Put every key and button back to how the game came?"
 msgstr "¿Devolver todas las teclas y botones a como venían con el juego?"
+
+msgid "Replace your adventure with this save?\n\nYour current save is kept in the game folder (dqix.sav.before-import-...). The game restarts."
+msgstr "¿Reemplazar tu aventura por esta partida?\n\nTu partida actual se conserva en la carpeta del juego (dqix.sav.before-import-...). El juego se reinicia."
 
 msgid "Reset"
 msgstr "Reiniciar"
@@ -762,6 +789,9 @@ msgstr "Pantalla pequeña: %s"
 msgid "Sound off"
 msgstr "Sonido desactivado"
 
+msgid "Spee&d of the fast forward"
+msgstr "Veloci&dad del avance rápido"
+
 msgid "Start"
 msgstr "Start"
 
@@ -801,6 +831,9 @@ msgstr "El navegador no se abrió. Ve a https://github.com/%s/issues/new y adjun
 msgid "The code your friend's game shows (like DQ-7KF2-QM4P), or their address (like 203.0.113.7:27900). The game restarts and connects: save your adventure first if you haven't."
 msgstr "El código que muestra el juego de tu amigo (como DQ-7KF2-QM4P) o su dirección (como 203.0.113.7:27900). El juego se reinicia y se conecta: guarda antes tu aventura si no lo has hecho."
 
+msgid "The file couldn't be read."
+msgstr "No se pudo leer el archivo."
+
 msgid "The game couldn't start again by itself. Close it and start it again."
 msgstr "El juego no pudo volver a iniciarse solo. Ciérralo y vuelve a abrirlo."
 
@@ -819,6 +852,9 @@ msgstr "No se pudo empaquetar el informe. Sigue en la carpeta reports."
 msgid "The report is saved. Describe what went wrong (what you did, what you expected, what happened) - as much as you like. Save adds it to the report; Skip keeps the report without a description."
 msgstr "El informe está guardado. Describe qué salió mal (qué hacías, qué esperabas, qué pasó) - todo lo que quieras. Guardar lo añade al informe; Omitir conserva el informe sin descripción."
 
+msgid "The save couldn't be written."
+msgstr "No se pudo escribir la partida."
+
 msgid "The update couldn't be downloaded: %s."
 msgstr "No se pudo descargar la actualización: %s."
 
@@ -836,6 +872,15 @@ msgstr "Esta copia no se hizo con BUILD.bat, así que no puede actualizarse sola
 
 msgid "This copy: %s\n\nStable: %s%s\nTested; recommended for everyone.\n\nNightly: %s%s\nThe newest work: new features and fixes first, but less tested.%s\n\nFriends playing together need the same version."
 msgstr "Esta copia: %s\n\nEstable: %s%s\nProbada; recomendada para todos.\n\nNightly: %s%s\nLo más nuevo: novedades y arreglos primero, pero menos probada.%s\n\nLos amigos que juegan juntos necesitan la misma versión."
+
+msgid "This file isn't a Dragon Quest IX save (it doesn't start with the game's name). It may be empty, or from another game."
+msgstr "Este archivo no es una partida de Dragon Quest IX (no empieza por el nombre del juego). Puede estar vacío o ser de otro juego."
+
+msgid "This file isn't a Dragon Quest IX save: its size isn't one a save has. Drop a .sav, .dsv or .duc file from your emulator."
+msgstr "Este archivo no es una partida de Dragon Quest IX: su tamaño no es el de una partida. Suelta un archivo .sav, .dsv o .duc de tu emulador."
+
+msgid "This save has no adventure in it: it's empty. Drop the save file of a game you played."
+msgstr "Esta partida no tiene ninguna aventura: está vacía. Suelta el archivo de una partida que hayas jugado."
 
 msgid "Top face button"
 msgstr "Botón superior"
@@ -944,6 +989,9 @@ msgstr "Tu nombre"
 
 msgid "Your router opened the port by itself (%s): give friends the address above. Friends in the same house use %s.%s"
 msgstr "Tu router abrió el puerto solo (%s): da a tus amigos la dirección de arriba. Los amigos que estén en tu casa usan %s.%s"
+
+msgid "Your save is copied to dqix-export.sav in the game folder. It is a plain .sav: DeSmuME and other emulators can import it."
+msgstr "Tu partida se ha copiado a dqix-export.sav en la carpeta del juego. Es un .sav normal: DeSmuME y otros emuladores pueden importarlo."
 
 msgid "a player left the lobby"
 msgstr "un jugador salió de la sala"

@@ -13,6 +13,31 @@ $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DQIX-
 if (-not $Folder) { $Folder = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
 $SaveFiles = @('dqix.sav', 'dqix.sav.bak', 'settings.ini', 'wireless.sav', 'reports')
 
+# The texts in this file are English; T gives the Spanish one when Windows is in Spanish.
+$Lang = 'en'
+try { $Lang = (Get-UICulture).TwoLetterISOLanguageName } catch { }
+$Es = @{
+    'Dragon Quest IX isn''t in {0} any more. Its entry in Apps is removed.' = 'Dragon Quest IX ya no est\u00e1 en {0}. Su entrada en Aplicaciones se ha quitado.'
+    'Uninstall {0}' = 'Desinstalar {0}'
+    'This removes Dragon Quest IX from this PC:\n  {0}\nand its shortcuts.\n' = 'Esto quita Dragon Quest IX de este PC:\n  {0}\ny sus accesos directos.\n'
+    'Keep my save file and settings (moved to Documents\{0} saves)' = 'Conservar mi partida guardada y ajustes (se mueven a Documents\\{0} saves)'
+    'Uninstall' = 'Desinstalar'
+    'Cancel' = 'Cancelar'
+    'Your save file will be deleted too. This cannot be undone. Continue?' = 'Tu partida guardada tambi\u00e9n se borrar\u00e1. No se puede deshacer. \u00bfContinuar?'
+    'Close the game first, then press OK.' = 'Cierra primero el juego y luego pulsa Aceptar.'
+    'Some files couldn''t be removed: {0}' = 'No se pudieron quitar algunos archivos: {0}'
+    'Dragon Quest IX is uninstalled.' = 'Dragon Quest IX se ha desinstalado.'
+    '\n\nYour saves are in:\n{0}\n(To use them again: put them in the new game folder.)' = '\n\nTus partidas guardadas est\u00e1n en:\n{0}\n(Para usarlas de nuevo: ponlas en la carpeta del juego nuevo.)'
+    '\n\nA few files are still in use; delete the folder {0} yourself later.' = '\n\nUnos pocos archivos siguen en uso; borra t\u00fa la carpeta {0} m\u00e1s tarde.'
+    '\n\nThe build tools (MSYS2) are still installed; remove them in Settings > Apps if you don''t need them.' = '\n\nLas herramientas de compilaci\u00f3n (MSYS2) siguen instaladas; qu\u00edtalas en Configuraci\u00f3n > Aplicaciones si no las necesitas.'
+}
+function T([string]$Text) {
+    if ($Lang -ne 'es') { return $Text }
+    $k = $Text.Replace("`r`n", '\n').Replace("`n", '\n')
+    if ($Es.ContainsKey($k)) { return [regex]::Unescape($Es[$k]) }
+    return $Text
+}
+
 function Get-SaveFolder { return (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "$AppName saves") }
 
 # Move the saves out of the game folder; returns where they went (or '' if there were none).
@@ -66,13 +91,13 @@ if (-not $self.StartsWith($env:TEMP, [StringComparison]::OrdinalIgnoreCase)) {
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $Folder 'BUILD.bat'))) {
-    [void][System.Windows.Forms.MessageBox]::Show("Dragon Quest IX isn't in $Folder any more. Its entry in Apps is removed.", $AppName)
+    [void][System.Windows.Forms.MessageBox]::Show(((T 'Dragon Quest IX isn''t in {0} any more. Its entry in Apps is removed.') -f $Folder), $AppName)
     if (Test-Path $UninstallKey) { Remove-Item -Path $UninstallKey -Recurse -Force }
     exit 0
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Uninstall $AppName"
+$form.Text = ((T 'Uninstall {0}') -f $AppName)
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 $form.FormBorderStyle = 'FixedDialog'; $form.MaximizeBox = $false; $form.MinimizeBox = $false
 $form.StartPosition = 'CenterScreen'; $form.AutoSize = $true; $form.AutoSizeMode = 'GrowAndShrink'
@@ -82,31 +107,31 @@ $flow.FlowDirection = 'TopDown'; $flow.AutoSize = $true; $flow.WrapContents = $f
 $form.Controls.Add($flow)
 $msg = New-Object System.Windows.Forms.Label
 $msg.AutoSize = $true; $msg.MaximumSize = New-Object System.Drawing.Size(460, 0)
-$msg.Text = "This removes Dragon Quest IX from this PC:`n  $Folder`nand its shortcuts.`n"
+$msg.Text = ((T "This removes Dragon Quest IX from this PC:`n  {0}`nand its shortcuts.`n") -f $Folder)
 $keep = New-Object System.Windows.Forms.CheckBox
 $keep.AutoSize = $true; $keep.Checked = $true
-$keep.Text = "Keep my save file and settings (moved to Documents\$AppName saves)"
+$keep.Text = ((T 'Keep my save file and settings (moved to Documents\{0} saves)') -f $AppName)
 $buttons = New-Object System.Windows.Forms.FlowLayoutPanel
 $buttons.AutoSize = $true; $buttons.Anchor = 'Right'; $buttons.Margin = New-Object System.Windows.Forms.Padding(0, 14, 0, 0)
-$ok = New-Object System.Windows.Forms.Button; $ok.Text = 'Uninstall'; $ok.AutoSize = $true; $ok.DialogResult = 'OK'
-$no = New-Object System.Windows.Forms.Button; $no.Text = 'Cancel'; $no.AutoSize = $true; $no.DialogResult = 'Cancel'
+$ok = New-Object System.Windows.Forms.Button; $ok.Text = (T 'Uninstall'); $ok.AutoSize = $true; $ok.DialogResult = 'OK'
+$no = New-Object System.Windows.Forms.Button; $no.Text = (T 'Cancel'); $no.AutoSize = $true; $no.DialogResult = 'Cancel'
 $buttons.Controls.AddRange(@($ok, $no))
 $flow.Controls.AddRange(@($msg, $keep, $buttons))
 $form.AcceptButton = $no; $form.CancelButton = $no
 
 if ($form.ShowDialog() -ne 'OK') { exit 0 }
 if (-not $keep.Checked) {
-    $a = [System.Windows.Forms.MessageBox]::Show('Your save file will be deleted too. This cannot be undone. Continue?', $AppName, 'YesNo', 'Warning')
+    $a = [System.Windows.Forms.MessageBox]::Show((T 'Your save file will be deleted too. This cannot be undone. Continue?'), $AppName, 'YesNo', 'Warning')
     if ($a -ne 'Yes') { exit 0 }
 }
 Get-Process dqix -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($Folder, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object {
-    [void][System.Windows.Forms.MessageBox]::Show('Close the game first, then press OK.', $AppName)
+    [void][System.Windows.Forms.MessageBox]::Show((T 'Close the game first, then press OK.'), $AppName)
 }
 try { $kept = Remove-Install $Folder $keep.Checked } catch {
-    [void][System.Windows.Forms.MessageBox]::Show("Some files couldn't be removed: $($_.Exception.Message)", $AppName, 'OK', 'Warning'); exit 1
+    [void][System.Windows.Forms.MessageBox]::Show(((T 'Some files couldn''t be removed: {0}') -f $_.Exception.Message), $AppName, 'OK', 'Warning'); exit 1
 }
-$done = 'Dragon Quest IX is uninstalled.'
-if ($kept) { $done += "`n`nYour saves are in:`n$kept`n(To use them again: put them in the new game folder.)" }
-if (Test-Path -LiteralPath $Folder) { $done += "`n`nA few files are still in use; delete the folder $Folder yourself later." }
-$done += "`n`nThe build tools (MSYS2) are still installed; remove them in Settings > Apps if you don't need them."
+$done = (T 'Dragon Quest IX is uninstalled.')
+if ($kept) { $done += ((T "`n`nYour saves are in:`n{0}`n(To use them again: put them in the new game folder.)") -f $kept) }
+if (Test-Path -LiteralPath $Folder) { $done += ((T "`n`nA few files are still in use; delete the folder {0} yourself later.") -f $Folder) }
+$done += (T "`n`nThe build tools (MSYS2) are still installed; remove them in Settings > Apps if you don't need them.")
 [void][System.Windows.Forms.MessageBox]::Show($done, $AppName)

@@ -35,3 +35,11 @@ one that no other entry of the same menu uses).
 
 The language of the operating system is used the first time; the choice is saved
 in `settings.ini` (`language = es`). `game_language = auto` follows the system.
+
+## The installer
+
+`tools/setup-wizard.ps1` and `tools/uninstall.ps1` run before the game exists, so they don't use the
+`.po` files. Each has its own table (`$Es`, near the top) with the Spanish text; the English text in the
+script is the key. They follow the language of Windows (Spanish or else English). The table is plain ASCII:
+`\n` is a line break and `\u00f3` an accented letter (`ó`), which keeps the files readable on any
+PowerShell. To translate them into another language, copy the table, change the language test in `T`.

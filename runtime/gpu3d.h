@@ -36,6 +36,11 @@ typedef struct {
     void (*render)(const Frame3D* f);          /* a new frame after SWAP_BUFFERS */
 } Renderer3D;
 extern const Renderer3D* g_renderer3d;         /* NULL = software */
+/* Another player's console in a session is never looked at, so its pictures aren't drawn (the 2D layers
+ * and the 3D): see gpu3d.c. video_needed() turns the drawing back on when the game captures the screen. */
+extern int g_video_hidden;
+void video_hide(void);
+void video_needed(void);
 extern int g_renderer3d_verify;                /* also run the software renderer (testing) */
 /* Widescreen (GPU renderer only): DS pixels added left and right of the 3D
  * picture; 0 = off. The game sees no difference. */

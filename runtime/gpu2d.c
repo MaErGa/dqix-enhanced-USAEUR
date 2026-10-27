@@ -673,12 +673,21 @@ double g_t2d_ms;
 static double ms_now2(void) { struct timespec t; timespec_get(&t, TIME_UTC); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }   /* always on: bug reports show 2D time */
 void gpu_render_line_(int line);
 void gpu_render_line(int line) { double t0 = ms_now2(); gpu_render_line_(line); g_t2d_ms += ms_now2() - t0; }
+/* DQIX_PRESENT_FROM=frame (tests: fast replays): nothing is drawn before that
+ * frame, only the game runs. Drawing starts a little early so that pictures the
+ * game keeps between frames (display capture) are there again. */
+int draw_skipped(void) {
+    static long long from = -2;
+    if (from == -2) { const char* e = getenv("DQIX_PRESENT_FROM"); from = e ? atoll(e) : -1; }
+    return from >= 0 && g_frame + 2 < (uint64_t)from;
+}
 void gpu_render_line_(int line) {
     if (line == 0) gpu_frame_start();
-    gpu3d_render_line(line);
+    int draw = !draw_skipped();
+    if (draw) gpu3d_render_line(line);
     for (int eng = 0; eng < 2; eng++) {
         line_regs_pre(eng, line);
-        render_engine_line(eng, line);
+        if (draw) render_engine_line(eng, line);
         line_regs_post(eng, line);
     }
     if (line == 191 && g_cap_active) { g_io[0x67] &= 0x7F; g_cap_active = 0; }   /* capture done: enable bit clears */

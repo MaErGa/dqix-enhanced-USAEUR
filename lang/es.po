@@ -114,8 +114,11 @@ msgstr "Pantalla DS &Lite\tF6"
 msgid "&Enhanced: sharper 3D\tF5"
 msgstr "&Mejorado: 3D más nítido\tF5"
 
-msgid "&Fast forward\t(or hold Tab)"
-msgstr "&Avance rápido\t(o mantén Tab)"
+msgid "&Export your save (a copy)..."
+msgstr "&Exportar tu partida (una copia)..."
+
+msgid "&Fast forward\tTab"
+msgstr "&Avance rápido\tTab"
 
 msgid "&Fullscreen\tF11"
 msgstr "Pantalla compl&eta\tF11"
@@ -144,8 +147,8 @@ msgstr "A&nfitrión: tus amigos se unen a ti..."
 msgid "&How does this work?"
 msgstr "¿Có&mo funciona esto?"
 
-msgid "&Import a save..."
-msgstr "I&mportar una partida..."
+msgid "&Import a save (from another copy or an emulator)..."
+msgstr "&Importar una partida (de otra copia o de un emulador)..."
 
 msgid "&Integer scaling"
 msgstr "Escalado e&ntero"
@@ -206,6 +209,9 @@ msgstr "&Suavizar texturas (Mejorado)"
 
 msgid "&Start now (everyone is here)\tEnter"
 msgstr "&Empezar ya (todos están aquí)\tEnter"
+
+msgid "&Thin (clean, like emulators at a high resolution)"
+msgstr "&Fino (limpio, como los emuladores a alta resolución)"
 
 msgid "&Unlimited"
 msgstr "&Sin límite"
@@ -306,6 +312,9 @@ msgstr "Gatillo trasero 3"
 msgid "Back paddle 4"
 msgstr "Gatillo trasero 4"
 
+msgid "Black sides here from now on (%s)"
+msgstr "Bandas negras aquí a partir de ahora (%s)"
+
 msgid "Both screens"
 msgstr "Ambas pantallas"
 
@@ -329,6 +338,9 @@ msgstr "Cambiar tecla..."
 
 msgid "Change the keys and controller buttons in controls.ini, next to the game (the game writes it with every action listed), then start the game again."
 msgstr "Cambia las teclas y los botones del mando en controls.ini, junto al juego (el juego lo escribe con todas las acciones), y luego vuelve a iniciar el juego."
+
+msgid "Character &outlines (Enhanced)"
+msgstr "C&ontornos de los personajes (Mejorado)"
 
 msgid "Check for &updates..."
 msgstr "Buscar &actualizaciones..."
@@ -408,6 +420,12 @@ msgstr "Consola DS Lite"
 msgid "DS Lite screen"
 msgstr "Pantalla DS Lite"
 
+msgid "DS save (*.sav)|*.sav|All files (*.*)|*.*"
+msgstr "Partida de DS (*.sav)|*.sav|Todos los archivos (*.*)|*.*"
+
+msgid "DS saves (*.sav;*.dsv;*.bin)|*.sav;*.dsv;*.bin|All files (*.*)|*.*"
+msgstr "Partidas de DS (*.sav;*.dsv;*.bin)|*.sav;*.dsv;*.bin|Todos los archivos (*.*)|*.*"
+
 msgid "DS: Down"
 msgstr "DS: Abajo"
 
@@ -426,14 +444,14 @@ msgstr "DS: Derecha"
 msgid "DS: Up"
 msgstr "DS: Arriba"
 
+msgid "Don't ask again"
+msgstr "No volver a preguntar"
+
 msgid "Don't send"
 msgstr "No enviar"
 
 msgid "Downloadable content"
 msgstr "Contenido descargable"
-
-msgid "Drag a save file onto the game window: a .sav, .dsv or .duc from DeSmuME or another emulator. The game checks it, keeps your current save in its folder, and restarts with the new one."
-msgstr "Arrastra un archivo de partida a la ventana del juego: un .sav, .dsv o .duc de DeSmuME u otro emulador. El juego lo comprueba, conserva tu partida actual en su carpeta y se reinicia con la nueva."
 
 msgid "Dragon Quest IX %s is available (you have %s).\n\nUpdate now?%s"
 msgstr "Dragon Quest IX %s está disponible (tienes %s).\n\n¿Actualizar ahora?%s"
@@ -477,14 +495,17 @@ msgstr "Intro: empezar (todos están aquí)    Esc: cancelar"
 msgid "Esc: back (the game restarts on its own)."
 msgstr "Esc: volver (el juego se reinicia solo)."
 
-msgid "Export save"
-msgstr "Exportar partida"
-
-msgid "Export the s&ave to a file"
-msgstr "Exportar la partida a un arc&hivo"
+msgid "Export your save"
+msgstr "Exportar tu partida"
 
 msgid "Fast forward (hold)"
 msgstr "Avance rápido (mantener)"
+
+msgid "Fast forward off"
+msgstr "Avance rápido desactivado"
+
+msgid "Fast forward on (Tab)"
+msgstr "Avance rápido activado (Tab)"
 
 msgid "Friends choose Join a friend and type this code. Your router doesn't let friends connect directly (%s), so they come in through the relay: it works on any internet, with a little more delay. Friends in the same house can use %s."
 msgstr "Tus amigos eligen Unirse a un amigo y escriben este código. Tu router no deja que se conecten directamente (%s), así que entran por el relé: funciona en cualquier internet, con un poco más de retardo. Los amigos que estén en tu casa pueden usar %s."
@@ -540,11 +561,11 @@ msgstr "Crear una sesión: tus amigos se unen a ti (hasta 3)."
 msgid "Ice Blue"
 msgstr "Azul hielo"
 
-msgid "Import"
-msgstr "Importar"
+msgid "Import a save"
+msgstr "Importar una partida"
 
-msgid "Import save"
-msgstr "Importar partida"
+msgid "Import and restart"
+msgstr "Importar y reiniciar"
 
 msgid "In its own &window (a clean field)"
 msgstr "En su propia &ventana (campo despejado)"
@@ -563,6 +584,9 @@ msgstr "Negro azabache"
 
 msgid "Join a friend"
 msgstr "Unirse a un amigo"
+
+msgid "Keep playing"
+msgstr "Seguir jugando"
 
 msgid "Key"
 msgstr "Tecla"
@@ -591,6 +615,9 @@ msgstr "Salir de la sesión"
 msgid "Leave the session first (Wireless menu), then update."
 msgstr "Sal antes de la sesión (menú Inalámbrico) y luego actualiza."
 
+msgid "Leave the session first (Wireless menu)."
+msgstr "Sal antes de la sesión (menú Inalámbrico)."
+
 msgid "Left face button"
 msgstr "Botón izquierdo"
 
@@ -602,6 +629,9 @@ msgstr "Clic del stick izquierdo"
 
 msgid "Left trigger"
 msgstr "Gatillo izquierdo"
+
+msgid "Like the &DS (thicker, follows the polygons)"
+msgstr "Como la &DS (más grueso, sigue los polígonos)"
 
 msgid "Ma&x"
 msgstr "Má&xima"
@@ -624,14 +654,17 @@ msgstr "Siguiente disposición"
 msgid "Nintendo Wi-Fi Connection closed in 2014. Fans run replacement servers (AltWFC, Wiimmfi) that a real DS reaches by changing its DNS setting; this game does the same.\n\nThe PC plays the part of a wireless access point called DQIX-PC and passes the DS's traffic to the internet. Nothing else on your PC is changed.\n\nServer > Built-in: nothing goes to the internet. The PC answers the game itself with DQIX's downloads as Nintendo served them (preserved by fans, in the wfc folder).\n\nConnect to the internet: the DS gets online when the game asks for it, e.g. when Sellma downloads DQVC items and new quests. Turn it off and the game behaves like a DS with no access point.\n\nUnlock all downloadable content now: switches on every downloadable quest and special guest in your save when the game starts, without visiting Sellma."
 msgstr "Nintendo Wi-Fi Connection cerró en 2014. Los fans mantienen servidores sustitutos (AltWFC, Wiimmfi) a los que una DS de verdad llega cambiando su ajuste de DNS; este juego hace lo mismo.\n\nEl PC hace de punto de acceso inalámbrico llamado DQIX-PC y pasa el tráfico de la DS a internet. No se cambia nada más en tu PC.\n\nServidor > Integrado: nada sale a internet. El PC responde él mismo al juego con las descargas de DQIX tal como las servía Nintendo (conservadas por fans, en la carpeta wfc).\n\nConectar a internet: la DS se conecta cuando el juego lo pide, por ejemplo cuando Sellma descarga artículos de DQVC y misiones nuevas. Desactívalo y el juego se comporta como una DS sin punto de acceso.\n\nDesbloquear ahora todo el contenido descargable: activa en tu partida todas las misiones descargables e invitados especiales al iniciar el juego, sin visitar a Sellma."
 
+msgid "No controller found: connect one, then try again"
+msgstr "No se encuentra ningún mando: conecta uno e inténtalo de nuevo"
+
+msgid "No place to remember here"
+msgstr "No hay ningún lugar que recordar aquí"
+
 msgid "Not changed"
 msgstr "Sin cambios"
 
 msgid "Not while playing with friends: it would leave them out of step. Leave the session first (Wireless menu)."
 msgstr "No mientras juegas con amigos: los dejaría descoordinados. Sal antes de la sesión (menú Inalámbrico)."
-
-msgid "Not while playing with friends: the game restarts. Leave the session first (Wireless menu)."
-msgstr "No mientras juegas con amigos: el juego se reinicia. Sal antes de la sesión (menú Inalámbrico)."
 
 msgid "OUT OF SYNC with %s at frame %llu: the PCs no longer agree. Leave and start a new session."
 msgstr "SIN SINCRONIZAR con %s en el fotograma %llu: los PC ya no coinciden. Sal y empieza una sesión nueva."
@@ -647,6 +680,9 @@ msgstr "Abrir GitHub"
 
 msgid "Optional ways to play that the DS didn't have. Walking with the stick is on at first; the others are off. With them all off the game is exactly the original.\n\nWalk in any direction with the left stick (on at first): on the DS the D-pad walks in 8 directions and only the stylus walks in any. With this on, a controller's left stick steers like the stylus while you walk around (the game's own stylus walking). In menus, dialogue and battles the stick stays a D-pad. Friends in a session don't need it on.\n\nWidescreen: the action (the field, or a battle) is drawn wider than the DS's screen, so you see more of the world left and right, and the other screen (the map, or the battle commands) sits small in a corner over it. K (or the right stick click) moves it to the next corner, I changes its size, O (or the left stick click) how see-through it is; it turns solid while the mouse is on it. U (or the left trigger) hides it; holding F9 (or the right trigger) shows it big until you let go. In a window it is 16:9; in fullscreen it fills the monitor. Text, menus and the touch screen's buttons stay in the middle, as on the DS. People and things at the sides stay in view (except while playing with friends far away). Enhanced mode only (the 3D on the graphics card).\n\nWidescreen, dynamic (experimental): the small screen stays top left, and the field slides over to make room when a menu would be under it.\n\nTop screen in the corner: the field as on the DS (4:3), the top screen beside it.\n\nTwo windows: one screen in each, to put them on two monitors (each can be fullscreen).\n\nSingle screen (U or the left trigger): only one screen, as big as it gets; F9 or the right trigger shows the other one.\n\nAll are also under View; F2 goes through the layouts."
 msgstr "Formas opcionales de jugar que la DS no tenía. Caminar con el stick viene activado al principio; las demás, desactivadas. Con todas desactivadas el juego es exactamente el original.\n\nCaminar en cualquier dirección con el stick izquierdo (activado al principio): en la DS la cruceta camina en 8 direcciones y solo el lápiz táctil camina en cualquiera. Con esto activado, el stick izquierdo del mando se maneja como el lápiz mientras caminas (el propio caminar con lápiz del juego). En menús, diálogos y combates el stick sigue siendo una cruceta. Los amigos de una sesión no necesitan tenerlo activado.\n\nPantalla panorámica: la acción (el campo, o un combate) se dibuja más ancha que la pantalla de la DS, así que ves más mundo a izquierda y derecha, y la otra pantalla (el mapa, o los comandos de combate) queda pequeña en una esquina por encima. K (o el clic del stick derecho) la lleva a la siguiente esquina, I cambia su tamaño, O (o el clic del stick izquierdo) cuánto se transparenta; se vuelve opaca mientras el ratón está sobre ella. U (o el gatillo izquierdo) la oculta; mantener F9 (o el gatillo derecho) la muestra grande hasta que sueltes. En ventana es 16:9; en pantalla completa ocupa todo el monitor. El texto, los menús y los botones de la pantalla táctil se quedan en el centro, como en la DS. La gente y las cosas de los lados se mantienen a la vista (salvo jugando con amigos lejanos). Solo en modo Mejorado (el 3D en la tarjeta gráfica).\n\nPanorámica dinámica (experimental): la pantalla pequeña se queda arriba a la izquierda y el campo se desliza para dejar sitio cuando un menú quedaría debajo.\n\nPantalla superior en la esquina: el campo como en la DS (4:3), con la pantalla superior a su lado.\n\nDos ventanas: una pantalla en cada una, para ponerlas en dos monitores (cada una puede ir a pantalla completa).\n\nUna sola pantalla (U o el gatillo izquierdo): solo una pantalla, lo más grande posible; F9 o el gatillo derecho muestra la otra.\n\nTodas están también en Ver; F2 recorre las disposiciones."
+
+msgid "Outlines: %s"
+msgstr "Contornos: %s"
 
 msgid "Pause"
 msgstr "Pausa"
@@ -678,8 +714,14 @@ msgstr "Pulsa una tecla para: %s (Esc cancela)"
 msgid "Put every key and button back to how the game came?"
 msgstr "¿Devolver todas las teclas y botones a como venían con el juego?"
 
-msgid "Replace your adventure with this save?\n\nYour current save is kept in the game folder (dqix.sav.before-import-...). The game restarts."
-msgstr "¿Reemplazar tu aventura por esta partida?\n\nTu partida actual se conserva en la carpeta del juego (dqix.sav.before-import-...). El juego se reinicia."
+msgid "Put the save next to the game as %s (the game not running)"
+msgstr "Pon la partida junto al juego como %s (con el juego cerrado)"
+
+msgid "Quit"
+msgstr "Salir"
+
+msgid "Quit Dragon Quest IX?\n\nAnything since you last saved in the game will be lost."
+msgstr "¿Salir de Dragon Quest IX?\n\nSe perderá todo lo que hayas hecho desde la última vez que guardaste en el juego."
 
 msgid "Reset"
 msgstr "Reiniciar"
@@ -723,8 +765,14 @@ msgstr "Guardar"
 msgid "Save &bug report\tF10"
 msgstr "Guardar &informe de error\tF10"
 
+msgid "Save &file"
+msgstr "Arc&hivo de partida"
+
 msgid "Save &screenshot\tF12"
 msgstr "Guardar cap&tura de pantalla\tF12"
+
+msgid "Save exported"
+msgstr "Partida exportada"
 
 msgid "Screenshot"
 msgstr "Captura de pantalla"
@@ -738,8 +786,8 @@ msgstr "Segunda tecla..."
 msgid "Send the bug report"
 msgstr "Enviar el informe de error"
 
-msgid "Send this report to the people working on the game?\n\nYour browser opens a new bug report on the project's GitHub page, already filled in, and the report's folder opens with one file in it to drag into that page. Then press Submit. You need a free GitHub account.\n\nEverything on GitHub is public: anyone can see the report and download its file. The file contains:\n  - a screenshot of the game\n  - every button you pressed since the game started\n  - your save file (your characters' names and progress), at the start and now, if ticked below\n  - your description\n  - the game's version, log and settings: your graphics card, the Wi-Fi settings and the console's made-up ID; after playing with friends also their names and the host's internet address\n  - timing measurements\n\nNothing is sent until you press Submit on GitHub."
-msgstr "¿Enviar este informe a las personas que trabajan en el juego?\n\nTu navegador abre un informe de error nuevo en la página de GitHub del proyecto, ya rellenado, y se abre la carpeta del informe con un archivo para arrastrar a esa página. Después pulsa Submit. Necesitas una cuenta de GitHub gratuita.\n\nTodo lo que hay en GitHub es público: cualquiera puede ver el informe y descargar su archivo. El archivo contiene:\n  - una captura del juego\n  - cada botón que pulsaste desde que empezó el juego\n  - tu archivo de guardado (los nombres de tus personajes y tu progreso), al principio y ahora, si marcas la casilla\n  - tu descripción\n  - la versión del juego, el registro y los ajustes: tu tarjeta gráfica, los ajustes de Wi-Fi y el ID inventado de la consola; tras jugar con amigos, también sus nombres y la dirección de internet del anfitrión\n  - mediciones de tiempos\n\nNo se envía nada hasta que pulses Submit en GitHub."
+msgid "Send this report to the people working on the game?\n\nYour browser opens a new bug report on the project's GitHub page, already filled in, and the report's file is copied for you: in the page you only press Ctrl+V, then Create. You need a free GitHub account (no account: paste it on the Discord instead).\n\nEverything on GitHub is public: anyone can see the report and download its file. The file contains:\n  - a screenshot of the game, and of the window with your display settings\n  - every button you pressed since the game started\n  - your save file (your characters' names and progress), at the start and now, if ticked below\n  - your description\n  - the game's version, log and settings: your graphics card, the Wi-Fi settings and the console's made-up ID; after playing with friends also their names and the host's internet address\n  - timing measurements\n\nNothing is sent until you press Submit on GitHub."
+msgstr "¿Enviar este informe a las personas que trabajan en el juego?\n\nTu navegador abre un informe de error nuevo en la página de GitHub del proyecto, ya rellenado, y el archivo del informe se copia por ti: en la página solo pulsa Ctrl+V y luego Create. Necesitas una cuenta de GitHub gratuita (sin cuenta: pégalo en el Discord).\n\nTodo lo que hay en GitHub es público: cualquiera puede ver el informe y descargar su archivo. El archivo contiene:\n  - una captura del juego y de la ventana con tus ajustes de pantalla\n  - cada botón que pulsaste desde que empezó el juego\n  - tu archivo de guardado (los nombres de tus personajes y tu progreso), al principio y ahora, si marcas la casilla de abajo\n  - tu descripción\n  - la versión del juego, el registro y los ajustes: tu tarjeta gráfica, los ajustes de Wi-Fi y el ID inventado de la consola; tras jugar con amigos, también sus nombres y la dirección de internet del anfitrión\n  - mediciones de tiempos\n\nNo se envía nada hasta que pulses Submit en GitHub."
 
 msgid "Send with my save"
 msgstr "Enviar con mi guardado"
@@ -816,6 +864,9 @@ msgstr "Intercambiar las pantallas (panorámica: mantén pulsado para ver la otr
 msgid "Tag mode, visiting other worlds and inviting friends (Pavo) need DS systems close to each other. This lets friends anywhere play those parts together, up to 4 players.\n\nHow: one of you hosts (Wireless > Play with friends far away > Host), the others join with the code the host's game shows. When everyone is in, the host presses Start the game. All the games restart together, each from its own save, and from then on every PC runs every player's DS: yours in the window, your friends' unseen. Only the buttons travel between the PCs, so the DSes really are side by side - on every PC at once.\n\nWhat to expect:\n- Save your adventure before hosting or joining: the game restarts.\n- Everyone needs the same version of this game.\n- Buttons react a little later than usual (the input delay, a few frames, depending on the distance).\n- If someone's PC is slow, everyone waits for it while your DSes are talking wirelessly.\n- The built-in Wi-Fi works as usual (DQVC, the downloads), with the host's files for everyone. Other online servers are off during a session.\n- Your game saves to your own save as always. Leaving (or closing the game) switches your DS off for the others.\n\nGetting in: the code works on any internet - it connects through a small relay on the internet when the host's router doesn't let friends in directly (apartment and mobile internet, for example). Where the router does, the host's game also shows an address that connects directly, with a little less delay. Windows may ask whether to allow the game on networks: allow it."
 msgstr "El modo encuentro, las visitas a otros mundos y la invitación de amigos (Pavo) necesitan consolas DS cercanas entre sí. Esto permite que amigos de cualquier lugar jueguen esas partes juntos, hasta 4 jugadores.\n\nCómo: uno de vosotros crea la sesión (Inalámbrico > Jugar con amigos lejanos > Crear), los demás se unen con el código que muestra el juego del anfitrión. Cuando estéis todos dentro, el anfitrión pulsa Empezar la partida. Todos los juegos se reinician a la vez, cada uno desde su propia partida guardada, y desde entonces cada PC ejecuta la DS de cada jugador: la tuya en la ventana, las de tus amigos sin verse. Solo viajan los botones entre los PC, así que las DS están realmente una al lado de otra, en todos los PC a la vez.\n\nQué esperar:\n- Guarda tu aventura antes de crear la sesión o unirte: el juego se reinicia.\n- Todos necesitan la misma versión de este juego.\n- Los botones reaccionan un poco más tarde de lo normal (el retardo de entrada, unos fotogramas, según la distancia).\n- Si el PC de alguien va lento, todos lo esperan mientras vuestras DS hablan por Wi-Fi.\n- El Wi-Fi integrado funciona como siempre (DQVC, las descargas), con los archivos del anfitrión para todos. Los demás servidores en línea están desactivados durante una sesión.\n- Tu juego se guarda en tu propia partida como siempre. Salir (o cerrar el juego) apaga tu DS para los demás.\n\nCómo entrar: el código funciona en cualquier internet: se conecta por un pequeño relé en internet cuando el router del anfitrión no deja entrar directamente a los amigos (pisos o internet móvil, por ejemplo). Donde el router sí deja, el juego del anfitrión también muestra una dirección que conecta directamente, con un poco menos de retardo. Windows puede preguntar si permites el juego en las redes: permítelo."
 
+msgid "That file isn't a Dragon Quest IX save (or it is damaged). Nothing was changed."
+msgstr "Ese archivo no es una partida de Dragon Quest IX (o está dañado). No se ha cambiado nada."
+
 msgid "The 64 downloadable quests and the 23 special guests will be switched on in your save the next time the game starts (they come with the save, as if downloaded from Nintendo Wi-Fi Connection).\n\nClose the game and start it again, load your adventure log, and save once in the game to keep them.\n\nThe quests are offered by their quest givers once you reach them in the story; the guests visit Quester's Rest."
 msgstr "Las 64 misiones descargables y los 23 invitados especiales se activarán en tu partida la próxima vez que se inicie el juego (vienen con la partida, como si se hubieran descargado de Nintendo Wi-Fi Connection).\n\nCierra el juego y vuelve a iniciarlo, carga tu diario de aventuras y guarda una vez en el juego para conservarlos.\n\nLas misiones las ofrecen sus clientes cuando llegues a ellos en la historia; los invitados visitan Quester's Rest."
 
@@ -831,8 +882,8 @@ msgstr "El navegador no se abrió. Ve a https://github.com/%s/issues/new y adjun
 msgid "The code your friend's game shows (like DQ-7KF2-QM4P), or their address (like 203.0.113.7:27900). The game restarts and connects: save your adventure first if you haven't."
 msgstr "El código que muestra el juego de tu amigo (como DQ-7KF2-QM4P) o su dirección (como 203.0.113.7:27900). El juego se reinicia y se conecta: guarda antes tu aventura si no lo has hecho."
 
-msgid "The file couldn't be read."
-msgstr "No se pudo leer el archivo."
+msgid "The file couldn't be written there."
+msgstr "No se pudo escribir el archivo ahí."
 
 msgid "The game couldn't start again by itself. Close it and start it again."
 msgstr "El juego no pudo volver a iniciarse solo. Ciérralo y vuelve a abrirlo."
@@ -849,17 +900,17 @@ msgstr "El nombre que ven tus amigos en la sesión (por ejemplo, el nombre de tu
 msgid "The report couldn't be packed. It is still in the reports folder."
 msgstr "No se pudo empaquetar el informe. Sigue en la carpeta reports."
 
+msgid "The report is copied: press Ctrl+V in the page"
+msgstr "El informe está copiado: pulsa Ctrl+V en la página"
+
 msgid "The report is saved. Describe what went wrong (what you did, what you expected, what happened) - as much as you like. Save adds it to the report; Skip keeps the report without a description."
 msgstr "El informe está guardado. Describe qué salió mal (qué hacías, qué esperabas, qué pasó) - todo lo que quieras. Guardar lo añade al informe; Omitir conserva el informe sin descripción."
-
-msgid "The save couldn't be written."
-msgstr "No se pudo escribir la partida."
 
 msgid "The update couldn't be downloaded: %s."
 msgstr "No se pudo descargar la actualización: %s."
 
-msgid "These are the usual keys; Game > Controls changes any of them.\n\nDS button      Keyboard              Controller\nD-pad          arrow keys            D-pad / left stick\nA / B          X / Z                 right / bottom button\nX / Y          S / A                 top / left button\nL / R          Q / W                 shoulder buttons\n               (turn the camera)     or the right stick, while walking\nSTART          Enter                 Start\nSELECT         Right Shift           Back\nTouch screen   left mouse button on the bottom screen\n\nScreens: F2 layout   U single screen (left trigger)   F9 swap (right trigger; widescreen: hold to see the other)\nWidescreen's small screen: K corner (right stick click)   I size   O opacity (left stick click)\nTab (hold) fast forward   P pause   Ctrl+R reset (controller: hold Start+Select+L+R)   - / = volume\nF5 Classic / Enhanced   F4 3D resolution   F6 DS Lite screen   F7 DS Lite console   F8 actual size   F3 window size\nF11 or Alt+Enter fullscreen (mouse at the top: menu bar)   F12 screenshot   F10 bug report   Esc leave fullscreen / quit\nIn fullscreen, double-click outside the touch screen to go back to the window."
-msgstr "Estas son las teclas habituales; Juego > Controles cambia cualquiera de ellas.\n\nBotón DS       Teclado               Mando\nCruceta        flechas               Cruceta / stick izquierdo\nA / B          X / Z                 botón derecho / inferior\nX / Y          S / A                 botón superior / izquierdo\nL / R          Q / W                 botones L / R\n               (girar la cámara)     o el stick derecho, al caminar\nSTART          Intro                 Start\nSELECT         Mayús derecha         Atrás\nPantalla táctil  botón izquierdo del ratón en la pantalla inferior\n\nPantallas: F2 disposición   U una sola pantalla (gatillo izquierdo)   F9 intercambiar (gatillo derecho; panorámica: mantén para ver la otra)\nPantalla pequeña de la panorámica: K esquina (clic del stick derecho)   I tamaño   O opacidad (clic del stick izquierdo)\nTab (mantener) avance rápido   P pausa   Ctrl+R reiniciar (mando: mantén Start+Select+L+R)   - / = volumen\nF5 Clásico / Mejorado   F4 resolución 3D   F6 pantalla DS Lite   F7 consola DS Lite   F8 tamaño real   F3 tamaño de ventana\nF11 o Alt+Intro pantalla completa (ratón arriba: barra de menús)   F12 captura   F10 informe de error   Esc salir de pantalla completa / cerrar\nEn pantalla completa, haz doble clic fuera de la pantalla táctil para volver a la ventana."
+msgid "These are the usual keys; Game > Controls changes any of them.\n\nDS button      Keyboard              Controller\nD-pad          arrow keys            D-pad / left stick\nA / B          X / Z                 right / bottom button\nX / Y          S / A                 top / left button\nL / R          Q / W                 shoulder buttons\n               (turn the camera)     or the right stick, while walking\nSTART          Enter                 Start\nSELECT         Right Shift           Back\nTouch screen   left mouse button on the bottom screen\n\nScreens: F2 layout   U single screen (left trigger)   F9 swap (right trigger; widescreen: hold to see the other)\nWidescreen's small screen: K corner (right stick click)   I size   O opacity (left stick click)\nTab fast forward (on/off)   P pause   Ctrl+R reset (controller: hold Start+Select+L+R)   - / = volume\nF5 Classic / Enhanced   F4 3D resolution   F6 DS Lite screen   F7 DS Lite console   F8 actual size   F3 window size\nF11 or Alt+Enter fullscreen (mouse at the top: menu bar)   F12 screenshot   F10 bug report   Esc leave fullscreen / quit (asks first)\nIn fullscreen, double-click outside the touch screen to go back to the window."
+msgstr "Estas son las teclas habituales; Juego > Controles cambia cualquiera de ellas.\n\nBotón DS       Teclado               Mando\nCruceta        flechas               Cruceta / stick izquierdo\nA / B          X / Z                 botón derecho / inferior\nX / Y          S / A                 botón superior / izquierdo\nL / R          Q / W                 botones L / R\n               (girar la cámara)     o el stick derecho, al caminar\nSTART          Intro                 Start\nSELECT         Mayús derecha         Atrás\nPantalla táctil  botón izquierdo del ratón en la pantalla inferior\n\nPantallas: F2 disposición   U una sola pantalla (gatillo izquierdo)   F9 intercambiar (gatillo derecho; panorámica: mantén para ver la otra)\nPantalla pequeña de la panorámica: K esquina (clic del stick derecho)   I tamaño   O opacidad (clic del stick izquierdo)\nTab avance rápido (sí/no)   P pausa   Ctrl+R reiniciar (mando: mantén Start+Select+L+R)   - / = volumen\nF5 Clásico / Mejorado   F4 resolución 3D   F6 pantalla DS Lite   F7 consola DS Lite   F8 tamaño real   F3 tamaño de ventana\nF11 o Alt+Intro pantalla completa (ratón arriba: barra de menús)   F12 captura   F10 informe de error   Esc salir de pantalla completa / salir (pregunta antes)\nEn pantalla completa, haz doble clic fuera de la pantalla táctil para volver a la ventana."
 
 msgid "This address is for friends whose internet has IPv6 (your router let it through). For the others the router didn't open a port (%s): forward TCP port %d to this PC (%s), or all join a free virtual LAN (Tailscale, ZeroTier or Radmin VPN) and use this PC's address there."
 msgstr "Esta dirección es para amigos cuyo internet tiene IPv6 (tu router lo deja pasar). Para los demás el router no abrió un puerto (%s): redirige el puerto TCP %d a este PC (%s), o uníos todos a una LAN virtual gratuita (Tailscale, ZeroTier o Radmin VPN) y usad allí la dirección de este PC."
@@ -872,15 +923,6 @@ msgstr "Esta copia no se hizo con BUILD.bat, así que no puede actualizarse sola
 
 msgid "This copy: %s\n\nStable: %s%s\nTested; recommended for everyone.\n\nNightly: %s%s\nThe newest work: new features and fixes first, but less tested.%s\n\nFriends playing together need the same version."
 msgstr "Esta copia: %s\n\nEstable: %s%s\nProbada; recomendada para todos.\n\nNightly: %s%s\nLo más nuevo: novedades y arreglos primero, pero menos probada.%s\n\nLos amigos que juegan juntos necesitan la misma versión."
-
-msgid "This file isn't a Dragon Quest IX save (it doesn't start with the game's name). It may be empty, or from another game."
-msgstr "Este archivo no es una partida de Dragon Quest IX (no empieza por el nombre del juego). Puede estar vacío o ser de otro juego."
-
-msgid "This file isn't a Dragon Quest IX save: its size isn't one a save has. Drop a .sav, .dsv or .duc file from your emulator."
-msgstr "Este archivo no es una partida de Dragon Quest IX: su tamaño no es el de una partida. Suelta un archivo .sav, .dsv o .duc de tu emulador."
-
-msgid "This save has no adventure in it: it's empty. Drop the save file of a game you played."
-msgstr "Esta partida no tiene ninguna aventura: está vacía. Suelta el archivo de una partida que hayas jugado."
 
 msgid "Top face button"
 msgstr "Botón superior"
@@ -918,6 +960,9 @@ msgstr "¿Actualizar a %s?\n\nEl juego se cierra, descarga %s, lo vuelve a compi
 msgid "Updates"
 msgstr "Actualizaciones"
 
+msgid "Use this save?\n\n%s\n\nThe game starts again with it. Your current save is kept as a copy in the save-backups folder, next to the game."
+msgstr "¿Usar esta partida?\n\n%s\n\nEl juego empieza de nuevo con ella. Tu partida actual se conserva como copia en la carpeta save-backups, junto al juego."
+
 msgid "Volume"
 msgstr "Volumen"
 
@@ -945,11 +990,17 @@ msgstr "Caminar en cualquier &dirección con el stick izquierdo"
 msgid "When everyone is here, press Start the game."
 msgstr "Cuando estén todos, pulsa Empezar la partida."
 
+msgid "Widescreen as usual here (%s)"
+msgstr "Panorámica como siempre aquí (%s)"
+
 msgid "Widescreen, d&ynamic (experimental)"
 msgstr "Panorámica di&námica (experimental)"
 
 msgid "Widescreen, d&ynamic (experimental: makes room for menus)\tF2"
 msgstr "Panorámica &dinámica (experimental: deja sitio a los menús)\tF2"
+
+msgid "Widescreen: &black sides in this place (remembered)"
+msgstr "Panorámica: &bandas negras en este lugar (se recuerda)"
 
 msgid "Widescreen: small screen opacity"
 msgstr "Panorámica: opacidad de la pantalla pequeña"
@@ -981,6 +1032,9 @@ msgstr "Ya estás dentro. Esperando a que el anfitrión empiece la sesión."
 msgid "Your &name..."
 msgstr "Tu &nombre..."
 
+msgid "Your current save couldn't be copied to save-backups, so nothing was changed."
+msgstr "Tu partida actual no se pudo copiar a save-backups, así que no se ha cambiado nada."
+
 msgid "Your monitor didn't say how big it is, so the real size can't be worked out.\n\nMeasure the width of its picture area in millimetres and put it in settings.ini\n(next to the game) as monitor_width_mm, e.g. monitor_width_mm = 597"
 msgstr "Tu monitor no dijo qué tamaño tiene, así que no se puede calcular el tamaño real.\n\nMide el ancho de su zona de imagen en milímetros y ponlo en settings.ini\n(junto al juego) como monitor_width_mm, por ejemplo monitor_width_mm = 597"
 
@@ -990,8 +1044,8 @@ msgstr "Tu nombre"
 msgid "Your router opened the port by itself (%s): give friends the address above. Friends in the same house use %s.%s"
 msgstr "Tu router abrió el puerto solo (%s): da a tus amigos la dirección de arriba. Los amigos que estén en tu casa usan %s.%s"
 
-msgid "Your save is copied to dqix-export.sav in the game folder. It is a plain .sav: DeSmuME and other emulators can import it."
-msgstr "Tu partida se ha copiado a dqix-export.sav en la carpeta del juego. Es un .sav normal: DeSmuME y otros emuladores pueden importarlo."
+msgid "Your save is %s, next to the game: copy that file"
+msgstr "Tu partida es %s, junto al juego: copia ese archivo"
 
 msgid "a player left the lobby"
 msgstr "un jugador salió de la sala"
@@ -1051,13 +1105,16 @@ msgid "hosting on port %d: waiting for players"
 msgstr "creando la sesión en el puerto %d: esperando jugadores"
 
 msgid "large"
-msgstr "tamaño grande"
+msgstr "grande"
+
+msgid "like the DS"
+msgstr "como la DS"
 
 msgid "lost the connection to the host"
 msgstr "se perdió la conexión con el anfitrión"
 
 msgid "medium"
-msgstr "tamaño mediano"
+msgstr "mediano"
 
 msgid "networking is not available"
 msgstr "la red no está disponible"
@@ -1075,7 +1132,7 @@ msgid "paused (P to continue)"
 msgstr "en pausa (P para continuar)"
 
 msgid "small"
-msgstr "tamaño pequeño"
+msgstr "pequeño"
 
 msgid "started: %d players, input delay %d frames (%d ms)"
 msgstr "empezada: %d jugadores, retardo de entrada %d fotogramas (%d ms)"
@@ -1094,6 +1151,9 @@ msgstr "el anfitrión se ha ido: la sesión terminó (tu juego sigue por su cuen
 
 msgid "the start message was damaged"
 msgstr "el mensaje de inicio llegó dañado"
+
+msgid "thin"
+msgstr "fino"
 
 msgid "this PC"
 msgstr "este PC"

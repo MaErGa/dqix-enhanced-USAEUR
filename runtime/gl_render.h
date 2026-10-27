@@ -8,6 +8,10 @@ int gl_render_init(int scale);                        /* 0 on failure (use the s
 void gl_render_set_scale(int scale);
 #define GL_MAX_SCALE 12                               /* the highest 3D resolution offered */
 int gl_render_max_scale(void);                        /* ...that this GPU can hold */
+extern int g_gl_soft_shade;                           /* above 1x: the game's stepped (toon) shading as a smooth ramp */
+extern int g_gl_bars;                                 /* widescreen: black sides (a scene made for the DS's width) */
+extern int g_gl_soft_alpha;                           /* above 1x: textures with alpha levels drawn smooth */
+extern int g_gl_outline;                              /* outlines above 1x: 1 thin, 2 medium, 0 the DS's own rule */
 void gl_set_smooth(int on);                           /* smooth textures (filtered) instead of the DS's blocks */
 const Renderer3D* gl_renderer3d(void);
 void gl_compose(int a_on_top, int lcd_on);           /* at VBlank: 2D + 3D -> both screens */
@@ -27,6 +31,7 @@ typedef struct {
     float lid[3], base[3], btn[3], hinge[3];          /* its colours (linear 0..1, as shown) */
     int skin;                                         /* draw the console photo (gl_set_skin) instead */
     float skin_k;                                     /* photo pixels per canvas unit */
+    float badge[4];                                   /* fast forward's sign: x, y (from the top), w, h in window pixels; w 0 = none */
 } GlPresent;
 void gl_set_skin(const uint8_t* rgba, int w, int h);
 void gl_present(const GlPresent* v);

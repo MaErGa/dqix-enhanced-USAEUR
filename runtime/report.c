@@ -2,6 +2,7 @@
  * the game with everything needed to replay the session exactly (the folder
  * name starts with the version, e.g. reports/v17-20261014-213000/):
  *   screenshot.bmp  what was on screen
+ *   window.png      the window as it looked (the frontend adds it, with display.txt)
  *   input.txt       every button / touch since launch (DQIX_INPUT_FILE syntax)
  *   boot.sav        the save file as it was at launch (absent if there was none)
  *   now.sav         the save file at the time of the report
@@ -136,8 +137,8 @@ static void w16(FILE* f, unsigned v) { fputc((int)(v & 0xFF), f); fputc((int)((v
 static void w32(FILE* f, uint32_t v) { w16(f, v & 0xFFFF); w16(f, v >> 16); }
 
 int report_zip(const char* dir, int with_saves, char* out, size_t outn) {
-    static const char* names[] = { "description.txt", "info.txt", "screenshot.bmp", "input.txt", "log.txt", "perf.txt",
-                                   "wireless.bin", "boot.sav", "now.sav" };
+    static const char* names[] = { "description.txt", "info.txt", "screenshot.bmp", "window.png", "display.txt", "input.txt",
+                                   "log.txt", "perf.txt", "wireless.bin", "boot.sav", "now.sav" };
     const char* base = strrchr(dir, '/'); base = base ? base + 1 : dir;
     snprintf(out, outn, "%s.zip", dir);
     FILE* z = fopen(out, "wb");

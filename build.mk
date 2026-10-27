@@ -25,7 +25,7 @@ SLIRP_SRC = $(wildcard third_party/libslirp/src/*.c) third_party/libslirp/glib/g
 SLIRPOBJ = $(patsubst third_party/libslirp/%.c,$(OBJ)/slirp/%.o,$(SLIRP_SRC))
 SLIRP_INC = -Ithird_party/libslirp/src -Ithird_party/libslirp/glib
 ifeq ($(OS),Windows_NT)
-NET_LIBS = -lws2_32 -liphlpapi -lgdi32 -lwinhttp
+NET_LIBS = -lws2_32 -liphlpapi -lgdi32 -lwinhttp -lcomdlg32
 endif
 NET_LIBS ?=
 

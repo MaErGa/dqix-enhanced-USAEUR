@@ -52,6 +52,16 @@ static int free_to_walk(void) {
 }
 #define WALK_X 128
 #define WALK_Y 100
+/* Where the game thinks the stylus went down (two words, x and y; -1 while
+ * nothing touches): the stylus walk goes the way the stylus moved from there.
+ * After a menu, a battle or a change of scene the game sometimes takes that
+ * point again from wherever the stylus is at that moment: with the stick
+ * still held, that is the dragged point, so the hero then walks by the
+ * stick's small wobbles - the wrong way - until it is let go. Seen in a
+ * test: X, then B, holding the stick down: the point became (128,148).
+ * Found by comparing memory with the stylus down at (128,100) and dragged
+ * (static data, the same in every scene). */
+#define TOUCH_START 0x114E84
 #define WALK_REACH 48
 #define WALK_DEAD 9000                  /* stick distance before it walks (of 32767) */
 static int g_walk_frames;               /* frames the stick has been walking (0: not) */
@@ -60,6 +70,10 @@ static int stick_walk(int* tx, int* ty) {
     double m = sqrt((double)(x * x + y * y));
     if (!g_analog_walk || m < WALK_DEAD || !free_to_walk()) { g_walk_frames = 0; return 0; }
     if (g_walk_frames++ < 2) { *tx = WALK_X; *ty = WALK_Y; return 1; }   /* touch down first, then drag */
+    if (g_walk_frames > 4) {                    /* the game moved the start point: lift the stylus for a frame, put it down again */
+        int32_t sx, sy; memcpy(&sx, &g_main_ram[TOUCH_START], 4); memcpy(&sy, &g_main_ram[TOUCH_START + 4], 4);
+        if (sx != WALK_X || sy != WALK_Y) { g_walk_frames = 0; return 0; }
+    }
     int dx = (int)lround((double)x / m * WALK_REACH), dy = (int)lround((double)y / m * WALK_REACH);
     *tx = WALK_X + dx; *ty = WALK_Y + dy;
     if (*tx < 0) *tx = 0; if (*tx > 255) *tx = 255; if (*ty < 0) *ty = 0; if (*ty > 191) *ty = 191;
@@ -231,6 +245,12 @@ void input_update(void) {
     else { int tx, ty;
         if (!g_touch_down && stick_walk(&tx, &ty)) { g_touch_down = 1; g_touch_x = tx; g_touch_y = ty; }
         else { if (g_touch_down) g_walk_frames = 0; g_keys_down |= g_fe_stick_keys; } }
+    {   static long long wl = -2; if (wl == -2) { const char* e = getenv("DQIX_WALKLOG"); wl = e ? atoll(e) : -1; }   /* tests */
+        if (wl >= 0 && (long long)g_frame >= wl && (long long)g_frame < wl + 200) {
+            uint32_t fp; memcpy(&fp, &g_main_ram[FIELD_PTR], 4);
+            fprintf(stderr, "walk f%llu flag %d field %08x touch %d %d,%d\n", (unsigned long long)g_frame, g_main_ram[WALK_FLAG], fp, g_touch_down, g_touch_x, g_touch_y);
+        }
+    }
     {   /* the stylus arrow (tags.txt, tag 1): hidden while the stick is walking (and a few frames
          * after), shown for the mouse and the touch screen. Only the picture: the game draws it either way. */
         extern int g_gx_hide;

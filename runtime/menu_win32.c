@@ -6,6 +6,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>                                        /* DROPFILES (a file on the clipboard) */
+#include <commdlg.h>                                       /* Open / Save As */
 #include "SDL_syswm.h"
 #include <string.h>
 #include <wchar.h>
@@ -58,7 +60,7 @@ static void build_menu(void) {
 
     HMENU game = sub(g_bar, "&Game");
     item(game, MI_PAUSE, "&Pause\tP");
-    item(game, MI_TURBO, "&Fast forward\t(or hold Tab)");
+    item(game, MI_TURBO, "&Fast forward\tTab");
     HMENU spd = sub(game, "Spee&d of the fast forward");
     item(spd, MI_SPEED0, "2x");
     item(spd, MI_SPEED0 + 1, "4x");
@@ -69,11 +71,12 @@ static void build_menu(void) {
     item(game, MI_MUTE, "&Mute");
     item(game, MI_CONTROLS_EDIT, "&Controls...");
     sep(game);
+    HMENU sf = sub(game, "Save &file");
+    item(sf, MI_SAVE_EXPORT, "&Export your save (a copy)...");
+    item(sf, MI_SAVE_IMPORT, "&Import a save (from another copy or an emulator)...");
+    sep(game);
     item(game, MI_SHOT, "Save &screenshot\tF12");
     item(game, MI_REPORT, "Save &bug report\tF10");
-    sep(game);
-    item(game, MI_SAVE_IMPORT, "&Import a save...");
-    item(game, MI_SAVE_EXPORT, "Export the s&ave to a file");
     sep(game);
     item(game, MI_EXIT, "E&xit\tEsc");
 
@@ -91,6 +94,10 @@ static void build_menu(void) {
     sep(res);
     item(res, MI_RES_AUTO, "&Auto: as sharp as your screen (up to 12x)");
     item(gfx, MI_SMOOTH, "&Smooth textures (Enhanced)");
+    HMENU ol = sub(gfx, "Character &outlines (Enhanced)");
+    item(ol, MI_OUTLINE0, "&Thin (clean, like emulators at a high resolution)");
+    item(ol, MI_OUTLINE0 + 1, "&Medium");
+    item(ol, MI_OUTLINE0 + 2, "Like the &DS (thicker, follows the polygons)");
 
     HMENU scr = sub(g_bar, "&Screen");
     item(scr, MI_LCD, "&DS Lite screen\tF6");
@@ -173,6 +180,7 @@ static void build_menu(void) {
     item(modern, MI_WIDE_DYN, "Widescreen, d&ynamic (experimental)");
     item(modern, MI_CORNER, "Top screen in the &corner (the field as on the DS)");
     item(modern, MI_POPOUT, "Widescreen: the small screen in its own &window (a clean field)");
+    item(modern, MI_SCENE_BARS, "Widescreen: &black sides in this place (remembered)");
     sep(modern);
     item(modern, MI_MODERN_HELP, "&What is this?");
     HMENU lang = sub(g_bar, "&Language / Idioma");
@@ -216,7 +224,122 @@ void menu_init(SDL_Window* win, const char* const* shell_names, int n_shells) {
 
 void menu_show(int on) {
     g_shown = on;
-    if (g_hwnd) SetMenu(g_hwnd, on ? g_bar : NULL);
+    if (!g_hwnd) return;
+    if (on) menu_strip(0);                                       /* a menu belongs to one window at a time */
+    SetMenu(g_hwnd, on ? g_bar : NULL);
+}
+
+static HWND g_strip;
+static int g_strip_menu;                                         /* one of its menus is open */
+/* The strip takes the keyboard while it shows (a window that never activates
+ * can't open its menus, and Windows draws their names greyed), and gives it
+ * back to the game when it hides or a menu closes. */
+static void strip_give_back(void) { if (g_hwnd) SetForegroundWindow(g_hwnd); }
+static LRESULT CALLBACK strip_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_COMMAND:                                             /* the game's window handles the menu's commands */
+        if (g_hwnd && HIWORD(wp) == 0) PostMessageW(g_hwnd, WM_COMMAND, wp, lp);
+        return 0;
+    case WM_ENTERMENULOOP: g_strip_menu = 1; break;
+    case WM_EXITMENULOOP: {
+        g_strip_menu = 0;
+        POINT pt; RECT r;                                        /* the mouse went down into the game: the strip goes */
+        if (GetCursorPos(&pt) && GetWindowRect(h, &r) && pt.y > r.bottom + 40) { ShowWindow(h, SW_HIDE); SetMenu(h, NULL); }
+        strip_give_back();
+        break;
+    }
+    case WM_CLOSE: return 0;
+    }
+    return DefWindowProcW(h, msg, wp, lp);
+}
+int menu_strip_shown(void) { return g_strip && IsWindowVisible(g_strip); }
+void menu_strip(int on) {
+    if (!g_hwnd || !g_bar) return;
+    if (!on) {
+        if (g_strip_menu) return;                                /* not while one of its menus is open */
+        if (g_strip && IsWindowVisible(g_strip)) { ShowWindow(g_strip, SW_HIDE); SetMenu(g_strip, NULL); strip_give_back(); }
+        return;
+    }
+    if (!g_strip) {
+        WNDCLASSW wc; memset(&wc, 0, sizeof wc);
+        wc.lpfnWndProc = strip_proc; wc.hInstance = GetModuleHandleW(NULL);
+        wc.lpszClassName = L"DQIXMenuStrip"; wc.hbrBackground = (HBRUSH)(COLOR_MENUBAR + 1);
+        wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+        RegisterClassW(&wc);
+        g_strip = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"", WS_POPUP, 0, 0, 10, 10, g_hwnd, NULL, wc.hInstance, NULL);
+        if (!g_strip) return;
+    }
+    SetMenu(g_hwnd, NULL);
+    SetMenu(g_strip, g_bar);
+    HMONITOR mon = MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi; mi.cbSize = sizeof mi;
+    if (!GetMonitorInfoW(mon, &mi)) return;
+    int w = mi.rcMonitor.right - mi.rcMonitor.left;
+    /* as tall as the menu bar (at this monitor's scale) plus a pixel */
+    SetWindowPos(g_strip, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, w, 40, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    MENUBARINFO mb; mb.cbSize = sizeof mb;
+    if (GetMenuBarInfo(g_strip, OBJID_MENU, 0, &mb)) {
+        RECT wr; GetWindowRect(g_strip, &wr);
+        int h = mb.rcBar.bottom - wr.top + 1;
+        if (h > 4 && h < 200) SetWindowPos(g_strip, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, w, h, SWP_NOACTIVATE);
+    }
+    DrawMenuBar(g_strip);
+    SetForegroundWindow(g_strip);                                /* its menus open, and aren't drawn greyed */
+}
+
+int file_dialog(SDL_Window* win, int save, const char* title, const char* filter, const char* default_name, char* out, size_t n) {
+    SDL_SysWMinfo info; SDL_VERSION(&info.version);
+    HWND owner = win && SDL_GetWindowWMInfo(win, &info) && info.subsystem == SDL_SYSWM_WINDOWS ? info.info.win.window : NULL;
+    wchar_t wtitle[200], wfilter[400], file[MAX_PATH] = L"";
+    MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, 200);
+    int fl = MultiByteToWideChar(CP_UTF8, 0, filter, -1, wfilter, 398);
+    if (fl <= 0) return 0;
+    for (int i = 0; i < fl; i++) if (wfilter[i] == L'|') wfilter[i] = 0;           /* "a|b|c|d" -> "a\0b\0c\0d\0\0" */
+    wfilter[fl] = 0;
+    if (default_name) MultiByteToWideChar(CP_UTF8, 0, default_name, -1, file, MAX_PATH);
+    OPENFILENAMEW o; memset(&o, 0, sizeof o);
+    o.lStructSize = sizeof o; o.hwndOwner = owner; o.lpstrFilter = wfilter; o.lpstrFile = file; o.nMaxFile = MAX_PATH;
+    o.lpstrTitle = wtitle; o.lpstrDefExt = L"sav";
+    o.Flags = OFN_NOCHANGEDIR | (save ? OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST : OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST);
+    if (!(save ? GetSaveFileNameW(&o) : GetOpenFileNameW(&o))) return 0;
+    return WideCharToMultiByte(CP_UTF8, 0, file, -1, out, (int)n, NULL, NULL) > 0;
+}
+
+int clipboard_set_file(const char* path) {
+    wchar_t w[MAX_PATH], full[MAX_PATH];
+    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, MAX_PATH)) return 0;
+    for (wchar_t* p = w; *p; p++) if (*p == L'/') *p = L'\\';
+    DWORD n = GetFullPathNameW(w, MAX_PATH, full, NULL);
+    if (!n || n >= MAX_PATH) return 0;
+    size_t bytes = sizeof(DROPFILES) + (n + 2) * sizeof(wchar_t);  /* the list ends with two NULs */
+    HGLOBAL g = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes);
+    if (!g) return 0;
+    DROPFILES* df = (DROPFILES*)GlobalLock(g);
+    df->pFiles = sizeof(DROPFILES); df->fWide = TRUE;
+    memcpy((char*)df + sizeof(DROPFILES), full, n * sizeof(wchar_t));
+    GlobalUnlock(g);
+    if (!OpenClipboard(g_hwnd)) { GlobalFree(g); return 0; }
+    EmptyClipboard();
+    int ok = SetClipboardData(CF_HDROP, g) != NULL;
+    if (!ok) GlobalFree(g);
+    UINT fmt = RegisterClipboardFormatW(L"Preferred DropEffect");      /* a copy, not a move */
+    HGLOBAL e = fmt ? GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD)) : NULL;
+    if (e) { *(DWORD*)GlobalLock(e) = 1 /* DROPEFFECT_COPY */; GlobalUnlock(e); if (!SetClipboardData(fmt, e)) GlobalFree(e); }
+    CloseClipboard();
+    return ok;
+}
+
+void window_fix_frame(SDL_Window* win) {
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (!win || !SDL_GetWindowWMInfo(win, &info) || info.subsystem != SDL_SYSWM_WINDOWS) return;
+    HWND h = info.info.win.window;
+    LONG_PTR st = GetWindowLongPtrW(h, GWL_STYLE);
+    LONG_PTR want = (st & ~(LONG_PTR)WS_POPUP) | WS_OVERLAPPEDWINDOW;
+    if (st != want) {
+        SetWindowLongPtrW(h, GWL_STYLE, want);
+        SetWindowPos(h, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 }
 
 /* The second window (two windows): a bar with one command, fullscreen. */
@@ -240,15 +363,15 @@ void menu_show_second(int on) {
     if (g_hwnd2 && IsWindow(g_hwnd2)) SetMenu(g_hwnd2, on ? g_bar2 : NULL);
 }
 
-/* The language changed: build the bars again with the new texts. The frontend
- * then calls menu_sync() to put the check marks back. */
+/* The language changed: build the bars again with the new texts. The frontend then calls menu_sync()
+ * to put the check marks back. The bar may be on the window or on the fullscreen strip. */
 void menu_rebuild(void) {
     if (g_hwnd && g_bar) {
         HMENU old = g_bar;
         build_menu();
-        if (g_shown) SetMenu(g_hwnd, g_bar);
+        if (g_strip && IsWindowVisible(g_strip)) { SetMenu(g_strip, g_bar); DrawMenuBar(g_strip); }
+        else if (g_shown) { SetMenu(g_hwnd, g_bar); DrawMenuBar(g_hwnd); }
         DestroyMenu(old);
-        DrawMenuBar(g_hwnd);
     }
     if (g_bar2) {
         HMENU old = g_bar2;
@@ -682,7 +805,7 @@ void volume_window_refresh(void) { if (g_vol) { SetScrollPos(GetDlgItem(g_vol, I
 #define ID_CTL_CLEAR 4104
 #define ID_CTL_DEFAULTS 4105
 #define ID_CTL_STATUS 4106
-static HWND g_ctlw;
+static HWND g_ctlw, g_ctl_owner;          /* the dialog, and the game's window */
 static int g_ctl_req = -1, g_ctl_req_what;
 static void ctl_fill(HWND h) {
     HWND l = GetDlgItem(h, ID_CTL_LIST);
@@ -746,7 +869,7 @@ void controls_window_open(SDL_Window* win) {
     memset(buf, 0, sizeof buf);
     DLGTEMPLATE* d = (DLGTEMPLATE*)align4(buf);
     d->style = DS_MODALFRAME | DS_CENTER | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
-    d->cdit = 12; d->cx = 400; d->cy = 290;
+    d->cdit = 13; d->cx = 400; d->cy = 290;
     WORD* p = (WORD*)(d + 1);
     *p++ = 0; *p++ = 0;
     p = put_str(p, W("Controls"));
@@ -763,7 +886,9 @@ void controls_window_open(SDL_Window* win) {
     p = put_item(p, WS_TABSTOP | BS_PUSHBUTTON, 170, 241, 100, 15, ID_CTL_PAD, 0x80, W("Controller button..."));
     p = put_item(p, WS_TABSTOP | BS_PUSHBUTTON, 274, 241, 54, 15, ID_CTL_CLEAR, 0x80, W("Clear"));
     p = put_item(p, WS_TABSTOP | BS_PUSHBUTTON, 8, 266, 100, 15, ID_CTL_DEFAULTS, 0x80, W("Restore defaults"));
+    p = put_item(p, SS_LEFT, 112, 269, 222, 10, ID_CTL_STATUS, 0x82, L"");
     p = put_item(p, WS_TABSTOP | BS_DEFPUSHBUTTON, 338, 266, 54, 15, IDOK, 0x80, W("Close"));
+    g_ctl_owner = info.info.win.window;
     g_ctlw = CreateDialogIndirectParamW(GetModuleHandleW(NULL), d, info.info.win.window, ctl_proc, 0);
 }
 int controls_window_request(int* action, int* what) {
@@ -771,7 +896,28 @@ int controls_window_request(int* action, int* what) {
     *action = g_ctl_req; *what = g_ctl_req_what; g_ctl_req = -1;
     return 1;
 }
-void controls_window_refresh(void) { if (g_ctlw) { ctl_fill(g_ctlw); SetForegroundWindow(g_ctlw); } }
+/* While the game waits for the new key, the keyboard has to be the game
+ * window's: Windows doesn't always let SDL_RaiseWindow take it from this
+ * dialog (the key then went to the dialog's list and the game waited for
+ * ever). SetFocus on a window of this thread always works. The dialog is
+ * disabled meanwhile (no stray clicks) and says what to press. */
+void controls_window_capture(int on, const char* prompt) {
+    if (!g_ctlw) return;
+    if (on) {
+        wchar_t w[200]; MultiByteToWideChar(CP_UTF8, 0, prompt ? prompt : "", -1, w, 200); w[199] = 0;
+        SetDlgItemTextW(g_ctlw, ID_CTL_STATUS, w);
+        EnableWindow(g_ctlw, FALSE);
+        if (g_ctl_owner) { SetForegroundWindow(g_ctl_owner); SetActiveWindow(g_ctl_owner); SetFocus(g_ctl_owner); }
+    } else {
+        SetDlgItemTextW(g_ctlw, ID_CTL_STATUS, L"");
+        EnableWindow(g_ctlw, TRUE);
+    }
+}
+void controls_window_refresh(void) {
+    if (!g_ctlw) return;
+    ctl_fill(g_ctlw);
+    if (IsWindowEnabled(g_ctlw)) { SetForegroundWindow(g_ctlw); SetFocus(GetDlgItem(g_ctlw, ID_CTL_LIST)); }
+}
 
 int session_window_action(void) { int a = g_ses_action; g_ses_action = 0; return a; }
 
@@ -788,6 +934,12 @@ float display_mm_per_pixel(SDL_Window* win) { (void)win; return 0; }
 void menu_init(SDL_Window* win, const char* const* shell_names, int n_shells) { (void)win; (void)shell_names; (void)n_shells; }
 void menu_rebuild(void) {}
 void menu_show(int on) { (void)on; }
+void menu_strip(int on) { (void)on; }
+int menu_strip_shown(void) { return 0; }
+void window_fix_frame(SDL_Window* win) { (void)win; }
+int clipboard_set_file(const char* path) { (void)path; return 0; }
+int file_dialog(SDL_Window* win, int save, const char* title, const char* filter, const char* default_name, char* out, size_t n) {
+    (void)win; (void)save; (void)title; (void)filter; (void)default_name; (void)out; (void)n; return 0; }
 void menu_init_second(SDL_Window* win) { (void)win; }
 void menu_show_second(int on) { (void)on; }
 void menu_check(int id, int on) { (void)id; (void)on; }
@@ -798,6 +950,7 @@ void volume_window_open(SDL_Window* win, int* volume, int* mute) { (void)win; (v
 void volume_window_refresh(void) {}
 void controls_window_open(SDL_Window* win) { (void)win; }
 int controls_window_request(int* action, int* what) { (void)action; (void)what; return 0; }
+void controls_window_capture(int on, const char* prompt) { (void)on; (void)prompt; }
 void controls_window_refresh(void) {}
 void session_window_update(const SessionWindow* w) { (void)w; }
 int session_window_action(void) { return 0; }

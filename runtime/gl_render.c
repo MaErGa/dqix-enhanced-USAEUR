@@ -130,6 +130,7 @@ static const char* FS_POLY =
     "uniform int u_part;\n"
     "uniform int u_sharpa;\n"                    /* smooth textures: a texture whose texels are see-through or not (no alpha levels): cut at half */                       /* 0 every pixel; 1 only solid ones (alpha 31); 2 only see-through ones */
     "uniform vec3 u_toon[32];\n"
+    "uniform int u_toonsoft; uniform vec3 u_toons[32];\n"   /* smooth shading: the toon table blurred, read between its entries */
     "void main() {\n"
     /* distance (in pixels) to each of the triangle's edges that is also an edge of
      * the DS polygon: pixels within one DS pixel of one are edge-marking candidates */
@@ -140,7 +141,10 @@ static const char* FS_POLY =
     "  ivec3 vc = ivec3(clamp(floor(v_color.rgb + 0.5), 0.0, 31.0));\n"
     "  int pa = int(v_color.a + 0.5);\n"
     "  int mode = int(v_attr.x + 0.5); bool textured = v_attr.y > 0.5;\n"
-    "  if (mode == 2) { ivec3 t = ivec3(u_toon[vc.r] * 31.0 + 0.5); if (u_highlight == 0) vc = t; else vc = ivec3(vc.r); }\n"
+    "  if (mode == 2) { ivec3 t = ivec3(u_toon[vc.r] * 31.0 + 0.5);\n"
+    "    if (u_toonsoft != 0 && u_highlight == 0) { float r = clamp(v_color.r, 0.0, 31.0); int i0 = int(floor(r)); int i1 = min(i0 + 1, 31);\n"
+    "      t = ivec3(mix(u_toons[i0], u_toons[i1], r - float(i0)) * 31.0 + 0.5); }\n"
+    "    if (u_highlight == 0) vc = t; else vc = ivec3(vc.r); }\n"
     "  ivec3 c = vc; int a = pa;\n"
     "  if (textured) {\n"
     "    vec4 t = texture(u_tex, v_tex);\n"
@@ -172,11 +176,33 @@ static const char* FS_POST =
     "in vec2 v_uv; out vec4 o_color;\n"
     "uniform sampler2D u_color; uniform sampler2D u_attr; uniform sampler2D u_depth;\n"
     "uniform int u_edge; uniform vec3 u_edgecol[8]; uniform int u_scale; uniform int u_aa;\n"
+    "uniform float u_ow;\n"                       /* outline width in pixels of this picture; 0: the DS's own rule */
     "uniform int u_fog; uniform int u_fog_alpha_only; uniform vec4 u_fogcol; uniform float u_fogtab[32];\n"
     "uniform int u_fogoff; uniform int u_fogshift; uniform int u_wbuf;\n"
     "void main() {\n"
     "  ivec2 p = ivec2(gl_FragCoord.xy);\n"
     "  vec4 c = texelFetch(u_color, p, 0); vec4 at = texelFetch(u_attr, p, 0);\n"
+    /* Above 1x: an even line u_ow pixels wide inside the silhouette of every
+     * object (where a nearby pixel belongs to another polygon id and lies
+     * behind), fading out over its last pixel, so it doesn't follow the
+     * polygons' corners in steps and notches. Only near a polygon's own edge
+     * (the edge flag, in a band a little wider than the line), like the DS:
+     * the see-through parts of a texture (fire, sprites, letters) get none. */
+    "  if (u_edge != 0 && u_ow > 0.0 && at.b > 0.5 && at.a > 0.5) {\n"
+    "    float id = at.r; float d = texelFetch(u_depth, p, 0).r;\n"
+    "    ivec2 sz = textureSize(u_color, 0);\n"
+    "    int R = int(ceil(u_ow)) + 1; float best = 1e9;\n"
+    "    for (int y = -R; y <= R; y++) for (int x = -R; x <= R; x++) {\n"
+    "      float dist = length(vec2(x, y));\n"
+    "      if ((x == 0 && y == 0) || dist >= best || dist > float(R)) continue;\n"
+    "      ivec2 q = p + ivec2(x, y);\n"
+    "      if (q.x < 0 || q.y < 0 || q.x >= sz.x || q.y >= sz.y) continue;\n"
+    "      vec4 an = texelFetch(u_attr, q, 0);\n"
+    "      if (abs(an.r - id) > 0.004 && d < texelFetch(u_depth, q, 0).r) best = dist;\n"
+    "    }\n"
+    "    float k = clamp(u_ow + 0.5 - best, 0.0, 1.0);\n"
+    "    if (k > 0.0) { int i = int(id * 63.0 + 0.5) >> 3; c = vec4(mix(c.rgb, u_edgecol[i], k), c.a); }\n"
+    "  } else\n"
     "  if (u_edge != 0 && at.b > 0.5 && at.a > 0.5) {\n"
     "    float id = at.r; float d = texelFetch(u_depth, p, 0).r;\n"
     "    ivec2 sz = textureSize(u_color, 0);\n"
@@ -217,13 +243,19 @@ static const char* FS_COMP =
     "in vec2 v_uv; out vec4 o_color;\n"
     "uniform sampler2D u_col; uniform sampler2D u_c2; uniform usampler2D u_info; uniform sampler2D u_3d;\n"
     "uniform int u_has3d; uniform vec2 u_outsize;\n"
-    "uniform int u_wide; uniform float u_wtot, u_wside;\n"   /* widescreen: DS pixels across, added each side */
+    "uniform int u_wide; uniform float u_wtot, u_wside;\n"
+    "uniform int u_bars;\n"                       /* a scene made only for the DS's width: black sides */   /* widescreen: DS pixels across, added each side */
     "vec3 q5(vec3 c) { return floor(c * 31.0 + 0.5); }\n"
     "void main() {\n"
     "  vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);\n"                  /* row 0 = top line */
     "  float dsx = u_wide != 0 ? uv.x * u_wtot - u_wside : uv.x * 256.0;\n"
     "  ivec2 p2 = ivec2(min(vec2(dsx, uv.y * 192.0), vec2(255.0, 191.0)));\n"
     "  bool side = u_wide != 0 && (dsx < 0.0 || dsx >= 256.0);\n"
+    "  if (side && u_bars != 0) {\n"
+    "    int mb0 = int(texelFetch(u_c2, ivec2(dsx < 0.0 ? 0 : 255, p2.y), 0).a * 255.0 + 0.5);\n"
+    "    vec3 o0 = vec3(0.0); if ((mb0 >> 5) == 1) o0 = vec3(float(mb0 & 31) / 16.0);\n"
+    "    o_color = vec4(o0, 1.0); return;\n"
+    "  }\n"
     "  if (side) {\n"
     /* Beyond the DS's picture there are no 2D layers: show the 3D there on lines
      * where the edge of the DS's picture shows it (the field), with that
@@ -244,7 +276,12 @@ static const char* FS_COMP =
     "  int mode = int(info.r & 3u);\n"
 
     "  if (mode == 0) { o_color = vec4(col, 1.0); return; }\n"
-    "  vec4 c2t = texelFetch(u_c2, p2, 0);\n"
+    /* the 2D picture behind the 3D (a menu's background, the title screen's
+     * picture): beyond the edge it continues as its own mirror image, not as
+     * its edge column stretched into stripes */
+    "  ivec2 p2b = p2;\n"
+    "  if (side) { int mx = dsx < 0.0 ? int(-dsx) : 511 - int(dsx); p2b.x = clamp(mx, 0, 255); }\n"
+    "  vec4 c2t = texelFetch(u_c2, p2b, 0);\n"
     "  vec3 c2 = c2t.rgb; int mb = int(c2t.a * 255.0 + 0.5);\n"
     "  ivec2 sz = textureSize(u_3d, 0);\n"
     "  vec4 s = texelFetch(u_3d, min(ivec2(v_uv * vec2(sz)), sz - 1), 0);\n"
@@ -268,6 +305,17 @@ static const char* FS_COMP =
     "  int mbm = mb >> 5; float mbf = float(mb & 31) / 16.0;\n"
     "  if (mbm == 1) o = o + (1.0 - o) * mbf; else if (mbm == 2) o = o - o * mbf;\n"
     "  o_color = vec4(o, 1.0);\n"
+    "}\n";
+
+/* Fast forward's sign: three arrows (in a quad, v_uv 0..1), white with a dark rim */
+static const char* FS_FF =
+    "#version 330 core\n"
+    "in vec2 v_uv; out vec4 o_color;\n"
+    "void main() {\n"
+    "  float f = fract(v_uv.x * 3.0), y = abs(v_uv.y - 0.5) * 2.0;\n"
+    "  float e = (1.0 - y) * 0.9 - f;\n"
+    "  float a = clamp(e * 14.0, 0.0, 1.0), rim = clamp((e + 0.14) * 14.0, 0.0, 1.0);\n"
+    "  o_color = vec4(vec3(a), max(a, rim * 0.7) * 0.9);\n"
     "}\n";
 
 static const char* FS_COPY =
@@ -533,11 +581,18 @@ static GLuint program(const char* vs, const char* fs, int poly) {
 
 /* ---------------------------------------------------------------- state */
 static int g_scale = 2;
-static GLuint prog_poly, prog_post, prog_comp, prog_copy, prog_screen, prog_ghost;
+static GLuint prog_poly, prog_post, prog_comp, prog_copy, prog_screen, prog_ghost, prog_ff;
 static GLuint ghost_tex[2], ghost_fbo[2]; static int ghost_cur = -1, ghost_w, ghost_h;
 static GLuint skin_tex; static int skin_w, skin_h;          /* console photo (View > Console colour) */
 static GLuint vao_poly, vbo_poly, vao_quad, vbo_quad;
 static GLuint samplers[9];                                    /* [s_mode * 3 + t_mode]: clamp, repeat, mirror */
+/* ...always smooth: above 1x, textures with alpha levels (A3I5, A5I3: shadows,
+ * glows, light) are drawn filtered, so their soft edges stay a gradient; at
+ * the DS's blocky texels they turned into rings of flat steps */
+static GLuint samplers_soft[9];
+int g_gl_soft_alpha = 1;
+int g_gl_bars;                                                 /* widescreen: black sides for this scene */
+int g_gl_soft_shade;                                           /* smooth shading: the toon table's steps as a ramp */
 static GLuint white_tex;
 
 typedef struct {
@@ -563,6 +618,7 @@ typedef struct { uint32_t ti, pl; uint64_t hash; GLuint tex; int w, h; uint64_t 
 #define TEXCACHE 4096
 static TexEntry g_texcache[TEXCACHE];
 static int g_smooth;                                           /* smooth textures (bilinear filtering) */
+int g_gl_outline = 1;                                          /* above 1x: 1 thin, 2 medium, 0 the DS's rule */
 static uint64_t g_frameno;
 static uint8_t* g_decode;
 
@@ -709,6 +765,7 @@ int gl_render_init(int scale) {
     prog_copy = program(VS_QUAD, FS_COPY, 0);
     prog_screen = program(VS_QUAD, FS_SCREEN, 0);
     prog_ghost = program(VS_QUAD, FS_GHOST, 0);
+    prog_ff = program(VS_QUAD, FS_FF, 0);
     if (!prog_poly || !prog_post || !prog_comp || !prog_copy || !prog_screen || !prog_ghost) return 0;
     p_glGenVertexArrays(1, &vao_poly); p_glBindVertexArray(vao_poly);
     p_glGenBuffers(1, &vbo_poly); p_glBindBuffer(GL_ARRAY_BUFFER, vbo_poly);
@@ -726,8 +783,13 @@ int gl_render_init(int scale) {
     p_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     p_glEnableVertexAttribArray(0);
     p_glGenSamplers(9, samplers);
+    p_glGenSamplers(9, samplers_soft);
     static const GLint wrap[3] = { GL_CLAMP_TO_EDGE, GL_REPEAT, GL_MIRRORED_REPEAT };
     for (int i = 0; i < 9; i++) {
+        p_glSamplerParameteri(samplers_soft[i], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        p_glSamplerParameteri(samplers_soft[i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        p_glSamplerParameteri(samplers_soft[i], GL_TEXTURE_WRAP_S, wrap[i / 3]);
+        p_glSamplerParameteri(samplers_soft[i], GL_TEXTURE_WRAP_T, wrap[i % 3]);
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_MIN_FILTER, g_smooth ? GL_LINEAR : GL_NEAREST);
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_MAG_FILTER, g_smooth ? GL_LINEAR : GL_NEAREST);
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_S, wrap[i / 3]);
@@ -817,6 +879,12 @@ static void gl_render(const Frame3D* f) {
     gl_render_(f);
     g_gl_stats.render_ms += perf_ms() - t0;
     g_gl_stats.polys += f->n;
+}
+/* Outlines above 1x: thin (half a DS pixel), medium (three quarters), or 0:
+ * the DS's own rule. */
+static float gl_outline_width(void) {
+    if (g_scale < 2) return 0;
+    return g_gl_outline == 1 ? fmaxf(1.0f, (float)g_scale * 0.5f) : g_gl_outline == 2 ? fmaxf(1.5f, (float)g_scale * 0.75f) : 0.0f;
 }
 static void gl_render_(const Frame3D* f) {
     g_frameno++;
@@ -920,7 +988,10 @@ static void gl_render_(const Frame3D* f) {
     { static float ew = -1; if (ew < 0) { const char* e = getenv("DQIX_EDGEW"); ew = e ? (float)atof(e) : 0; }
       /* outlines: one DS pixel wide at 1x; above that half of one, so a thin leg or
        * arm keeps its colour inside the outline instead of becoming all outline */
-      p_glUniform1f(p_glGetUniformLocation(prog_poly, "u_edgew"), ew > 0 ? ew : g_scale >= 2 ? (float)g_scale * 0.5f : 1.0f); }
+      /* with the even outline (above 1x) the band of pixels that may take it is
+       * a little wider than the line, so it reaches round the models' corners */
+      float ow = gl_outline_width();
+      p_glUniform1f(p_glGetUniformLocation(prog_poly, "u_edgew"), ew > 0 ? ew : ow > 0 ? ow + 1.5f : g_scale >= 2 ? (float)g_scale * 0.5f : 1.0f); }
     p_glUniform1i(p_glGetUniformLocation(prog_poly, "u_tex"), 0);
     p_glUniform1i(p_glGetUniformLocation(prog_poly, "u_highlight"), (disp3d >> 1) & 1);
     p_glUniform1i(p_glGetUniformLocation(prog_poly, "u_alphatest"), (disp3d >> 2) & 1);
@@ -929,6 +1000,17 @@ static void gl_render_(const Frame3D* f) {
     float toon[96];
     for (int i = 0; i < 32; i++) { uint16_t c = IO16_(0x380 + i * 2); toon[i * 3] = (float)(c & 31) / 31.0f; toon[i * 3 + 1] = (float)((c >> 5) & 31) / 31.0f; toon[i * 3 + 2] = (float)((c >> 10) & 31) / 31.0f; }
     p_glUniform3fv(p_glGetUniformLocation(prog_poly, "u_toon"), 32, toon);
+    {   /* smooth shading (Enhanced, above 1x): the table's steps softened into a ramp */
+        float soft[96];
+        static const float wt[5] = { 1, 2, 3, 2, 1 };
+        for (int i = 0; i < 32; i++) for (int c = 0; c < 3; c++) {
+            float sum = 0, ws = 0;
+            for (int k = -2; k <= 2; k++) { int j = i + k; if (j < 0) j = 0; if (j > 31) j = 31; sum += toon[j * 3 + c] * wt[k + 2]; ws += wt[k + 2]; }
+            soft[i * 3 + c] = sum / ws;
+        }
+        p_glUniform3fv(p_glGetUniformLocation(prog_poly, "u_toons"), 32, soft);
+        p_glUniform1i(p_glGetUniformLocation(prog_poly, "u_toonsoft"), g_gl_soft_shade && g_scale >= 2);
+    }
     GLint loc_texsize = p_glGetUniformLocation(prog_poly, "u_texsize");
     GLint loc_sharpa = p_glGetUniformLocation(prog_poly, "u_sharpa");
     GLint loc_part = p_glGetUniformLocation(prog_poly, "u_part");
@@ -951,7 +1033,7 @@ static void gl_render_(const Frame3D* f) {
     for (int i = 0; i < nb; i++) {
         Batch* b = &g_batches[i];
         p_glBindTexture(GL_TEXTURE_2D, b->tex);
-        p_glBindSampler(0, samplers[b->sampler]);
+        p_glBindSampler(0, (!b->alpha1 && g_gl_soft_alpha && g_scale >= 2 ? samplers_soft : samplers)[b->sampler]);
         p_glUniform2f(loc_texsize, b->tw, b->th);
         p_glUniform1i(loc_sharpa, g_smooth && b->alpha1);
         p_glDepthFunc(b->depth_eq ? GL_EQUAL : GL_LESS);
@@ -1051,6 +1133,7 @@ static void gl_render_(const Frame3D* f) {
     { static int eb = -2; if (eb == -2) eb = getenv("DQIX_EDGEBLEND") ? atoi(getenv("DQIX_EDGEBLEND")) : -1;
       p_glUniform1i(p_glGetUniformLocation(prog_post, "u_aa"), (eb < 0 ? g_scale == 1 : eb) && ((disp3d >> 4) & 1)); }
     p_glUniform1i(p_glGetUniformLocation(prog_post, "u_scale"), g_scale);
+    p_glUniform1f(p_glGetUniformLocation(prog_post, "u_ow"), gl_outline_width());
     float ec[24];
     for (int i = 0; i < 8; i++) { uint16_t c = IO16_(0x330 + i * 2); ec[i * 3] = (float)(c & 31) / 31.0f; ec[i * 3 + 1] = (float)((c >> 5) & 31) / 31.0f; ec[i * 3 + 2] = (float)((c >> 10) & 31) / 31.0f; }
     p_glUniform3fv(p_glGetUniformLocation(prog_post, "u_edgecol"), 8, ec);
@@ -1116,6 +1199,7 @@ void gl_compose(int a_on_top, int lcd_on) {
     GLint loc_wide = p_glGetUniformLocation(prog_comp, "u_wide");
     p_glUniform1f(p_glGetUniformLocation(prog_comp, "u_wtot"), W);
     p_glUniform1f(p_glGetUniformLocation(prog_comp, "u_wside"), (float)g_wside);
+    p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_bars"), g_gl_bars);
     p_glUniform4f(p_glGetUniformLocation(prog_comp, "u_uv"), 0, 0, 1, 1);
     p_glBindVertexArray(vao_quad);
     for (int eng = 0; eng < 2; eng++) {
@@ -1231,6 +1315,16 @@ void gl_present(const GlPresent* v) {
     p_glUniform4f(p_glGetUniformLocation(P, "u_uv"), 0, 0, 1, 1);
     p_glBindVertexArray(vao_quad);
     p_glDrawArrays(GL_TRIANGLES, 0, 6);
+    if (v->badge[2] > 0 && prog_ff && v->win_w > 0 && v->win_h > 0) {   /* fast forward is on */
+        p_glEnable(GL_BLEND); p_glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD); p_glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+        p_glUseProgram(prog_ff);
+        float W = (float)v->win_w, H = (float)v->win_h;
+        p_glUniform4f(p_glGetUniformLocation(prog_ff, "u_rect"), v->badge[0] / W * 2 - 1, 1 - (v->badge[1] + v->badge[3]) / H * 2,
+                      v->badge[2] / W * 2, v->badge[3] / H * 2);
+        p_glUniform4f(p_glGetUniformLocation(prog_ff, "u_uv"), 0, 0, 1, 1);
+        p_glDrawArrays(GL_TRIANGLES, 0, 6);
+        p_glDisable(GL_BLEND);
+    }
 }
 
 /* A console photo (RGBA, rows top-down), drawn around the screens. */

@@ -9,15 +9,21 @@ USA or European version) into a PC version of the game. No game files are includ
    - The first time it installs free build tools (MSYS2) and takes 10-20 minutes.
    - It needs Windows 10/11 (64-bit), ~4 GB free space and the internet once.
 2. Press "Play now" at the end. Later, use the desktop or Start menu shortcut.
+3. To update to a newer version later: unzip it anywhere and double-click
+   "Update Dragon Quest IX.bat". It finds your game, keeps your saves and ROM.
 
-Without the window: put your ROM (.nds) in the "rom" folder, double-click
-BUILD.bat, then play game\dqix.exe.
+Without the window: put your ROM (.nds, or a .zip with it inside) in the "rom"
+folder, double-click BUILD.bat, then play game\dqix.exe.
+
+MSYS2 already installed somewhere unusual? Put its folder in msys2-path.txt
+next to BUILD.bat (one line, e.g. D:\tools\msys64).
 
 Controls: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q/W = L/R,
-Enter = START, Right Shift = SELECT, mouse = touch screen, Tab = fast forward.
+Enter = START, Right Shift = SELECT, mouse = touch screen, Tab = fast forward (on/off).
 Gamepads work too. Every setting is in the menu bar at the top of the window.
 
-If something goes wrong, press F10 in the game: it saves a bug report in
-game\reports\ (with a box to describe what happened). Send that folder.
+If something goes wrong, press F10 in the game: it saves a bug report
+(with a box to describe what happened) and can open GitHub for you with it
+copied: press Ctrl+V in the page, then Create.
 
 Please don't share the "game" or "build" folders: they contain the game.

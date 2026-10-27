@@ -69,6 +69,7 @@ void controls_defaults(void) {
     g_ctl_pad[CA_LEFT] = SDL_CONTROLLER_BUTTON_DPAD_LEFT; g_ctl_pad[CA_RIGHT] = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
     g_ctl_pad[CA_SINGLE] = CTL_PAD_LT; g_ctl_pad[CA_SWAP] = CTL_PAD_RT;
     g_ctl_pad[CA_CORNER] = SDL_CONTROLLER_BUTTON_RIGHTSTICK; g_ctl_pad[CA_OPACITY] = SDL_CONTROLLER_BUTTON_LEFTSTICK;
+    g_ctl_pad[CA_SHOT] = SDL_CONTROLLER_BUTTON_MISC1;            /* the Share / Capture button (Xbox Series, Switch Pro, PS5's mic) */
 }
 
 /* ---------------------------------------------------------------- names */
@@ -214,7 +215,9 @@ void controls_load(void) {
     FILE* f = fopen(INI, "r");
     if (!f) return;
     char line[300];
+    int version = 1;                                             /* files from v31 have no "# version" line */
     while (fgets(line, sizeof line, f)) {
+        if (!strncmp(line, "# version ", 10)) version = atoi(line + 10);
         if (line[0] == '#') continue;
         char* eq = strchr(line, '='); if (!eq) continue;
         *eq = 0; char* id = line; trim(id); while (*id == ' ') id++;
@@ -227,6 +230,8 @@ void controls_load(void) {
         g_ctl_key[a][0] = parse_key(f1); g_ctl_key[a][1] = parse_key(f2); g_ctl_pad[a] = parse_pad(f3);
     }
     fclose(f);
+    /* new in version 2 (v32): the Share button takes a screenshot, unless that button already has a job */
+    if (version < 2 && g_ctl_pad[CA_SHOT] == CTL_NONE && controls_pad_owner(SDL_CONTROLLER_BUTTON_MISC1) < 0) g_ctl_pad[CA_SHOT] = SDL_CONTROLLER_BUTTON_MISC1;
 }
 
 void controls_save(void) {
@@ -234,6 +239,7 @@ void controls_save(void) {
     FILE* f = fopen(INI, "w");
     if (!f) return;
     fprintf(f, "# Dragon Quest IX controls (Game > Controls on Windows). The game writes this file.\n");
+    fprintf(f, "# version 2\n");
     fprintf(f, "# action = key | second key | controller button\n");
     fprintf(f, "# Keys by name (X, Return, Left Shift, F9, -, Ctrl+R), or none.\n");
     fprintf(f, "# Controller (by position): a (bottom) b (right) x (left) y (top) back guide start leftstick rightstick\n");

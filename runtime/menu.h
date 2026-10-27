@@ -18,12 +18,13 @@ enum {
     MI_OPACITY1 = 220,                                                  /* 100, 75, 50, 25% (+0..3) */
     MI_WIDE_DYN = 240, MI_SINGLE, MI_RESET, MI_VOLUME, MI_MUTE, MI_CONTROLS_EDIT,
     MI_CORNER0 = 250,                                                   /* + 0..3: top left, top right, bottom right, bottom left */
+    MI_OUTLINE0 = 260,                                                  /* + 0..2: thin, medium, like the DS */
+    MI_SCENE_BARS = 263, MI_SAVE_EXPORT, MI_SAVE_IMPORT,
     MI_SSIZE0 = 254,                                                    /* + 0..2: small, medium, large */
     MI_SEND_REPORT = 210,
     MI_LANG0 = 300,                                                     /* + the interface language's index (i18n.h) */
     MI_GAMELANG0 = 320,                                                 /* automatic; + 1..GAMELANG_COUNT: the game's text */
     MI_LANG_HELP = 330,
-    MI_SAVE_IMPORT = 340, MI_SAVE_EXPORT,
     MI_SPEED0 = 350,                                                    /* + 0: 2x, 1: 4x, 2: unlimited (fast forward) */
 };
 
@@ -35,6 +36,19 @@ enum {
 void menu_init(SDL_Window* win, const char* const* shell_names, int n_shells);
 void menu_show(int on);                       /* hidden in fullscreen */
 void menu_rebuild(void);                      /* the language changed: new texts (then menu_sync()) */
+/* Fullscreen: the menu bar shown in a strip of its own over the top of the
+ * screen (on the window itself it made Windows shrink the picture). */
+void menu_strip(int on);
+int menu_strip_shown(void);                  /* fullscreen: the menu strip is showing */
+/* After leaving fullscreen: make sure the window has its frame back (title
+ * bar, borders: it could come back as a bare popup stuck in the corner). */
+void window_fix_frame(SDL_Window* win);
+/* Put a file on the clipboard, as Explorer's Copy does: Ctrl+V in a browser
+ * (GitHub) or Discord attaches it. 1 if done (Windows). */
+int clipboard_set_file(const char* path);
+/* Windows' Open / Save As box. filter: "Saves (*.sav;*.dsv)|*.sav;*.dsv|All files|*.*".
+ * 1 with the chosen path in out (UTF-8), 0 if cancelled or not on Windows. */
+int file_dialog(SDL_Window* win, int save, const char* title, const char* filter, const char* default_name, char* out, size_t n);
 /* the second window (two windows): a bar with only Fullscreen (MI_FULL2) */
 void menu_init_second(SDL_Window* win);
 void menu_show_second(int on);
@@ -82,8 +96,11 @@ void volume_window_refresh(void);                   /* the values changed elsewh
 /* Game > Controls...: the list of actions and their keys (controls.h). When the
  * player asks to change one, controls_window_request() reports it once
  * (what: 0 key, 1 second key, 2 controller button); the game then waits for
- * the key in its own window and calls controls_window_refresh(). */
+ * the key in its own window (controls_window_capture(1, prompt): the game's
+ * window gets the keyboard, the dialog says what to press) and afterwards
+ * calls controls_window_capture(0, NULL) and controls_window_refresh(). */
 void controls_window_open(SDL_Window* win);
 int controls_window_request(int* action, int* what);
-void controls_window_refresh(void);                    /* 0 nothing, 1 start, 2 cancel (each reported once) */
+void controls_window_capture(int on, const char* prompt);
+void controls_window_refresh(void);
 void session_window_close(void);

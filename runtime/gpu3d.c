@@ -109,6 +109,7 @@ static int poly_tag(u32 tp) {
 static s32 m_proj[16], m_pos[16], m_vec[16], m_tex[16], m_clip[16];
 static s32 st_proj[16], st_pos[32][16], st_vec[32][16], st_tex[16];
 static s32 sp_proj, sp_pos, sp_tex;
+static int g_newobj_hide;   /* (see box_test) */
 static int clip_dirty = 1;
 static u32 mtx_mode;
 static u32 gxstat;                      /* bit 1 box test result, bit 15 stack error, bits 30-31 IRQ mode */
@@ -308,7 +309,7 @@ static void wide_submit(int nverts, int facing) {
     memset(p, 0, sizeof *p);
     p->attr = cur_poly_attr; p->texparam = tex_param; p->texpal = tex_pal;
     p->facing = facing;
-    p->hidden = g_gx_hide && (poly_tag(tex_param) & g_gx_hide) != 0;
+    p->hidden = (g_gx_hide && (poly_tag(tex_param) & g_gx_hide) != 0) || g_newobj_hide;
     u32 texfmt = (tex_param >> 26) & 7, polyalpha = (cur_poly_attr >> 16) & 0x1F;
     p->translucent = (texfmt == 1 || texfmt == 6) || (polyalpha > 0 && polyalpha < 31);
     if (!p->translucent) n_wopaque++;
@@ -428,7 +429,7 @@ static void submit_polygon(void) {
     memset(p, 0, sizeof *p);
     p->attr = cur_poly_attr; p->texparam = tex_param; p->texpal = tex_pal;
     p->facing = facing;
-    p->hidden = g_gx_hide && (poly_tag(tex_param) & g_gx_hide) != 0;
+    p->hidden = (g_gx_hide && (poly_tag(tex_param) & g_gx_hide) != 0) || g_newobj_hide;
     u32 texfmt = (tex_param >> 26) & 7, polyalpha = (cur_poly_attr >> 16) & 0x1F;
     p->translucent = (texfmt == 1 || texfmt == 6) || (polyalpha > 0 && polyalpha < 31);
     p->shadowmask = (cur_poly_attr & 0x3F000030) == 0x00000030;
@@ -555,6 +556,30 @@ static void calc_lighting(void) {
  * g_wide_cull set (widescreen on, not in a session: there every PC must
  * decide exactly alike) the box is tested against the wide view instead. */
 int g_wide_cull;
+/* An object the widening brings into view for the first time: the game draws
+ * it, but on that first frame some of its parts can still be where they were
+ * long ago (its joints are only worked out while it is in view: a piece of
+ * Coffinwell's railing flashed across the well). Its polygons (those sent
+ * until the next box test) are left out of the picture for that frame; the
+ * game still draws it, so the next frame has it right. "Seen" = a box of the
+ * same size passed a test in the last few frames near the same place. The
+ * hiding lasts until the game's next box test (the next object). */
+typedef struct { s16 b[6]; s32 x, y, w; uint64_t frame; } SeenBox;
+#define SEEN_MAX 1024
+static SeenBox g_seen[SEEN_MAX]; static int g_seen_next;      /* a ring of recent passes */
+static int seen_before(const s16* b, s32 x, s32 y, s32 w) {
+    s32 tol = (w < 0 ? -w : w) / 8 + 64;
+    for (int i = 0; i < SEEN_MAX; i++) {
+        const SeenBox* e = &g_seen[i];
+        if (!e->frame || e->frame >= g_frame || g_frame - e->frame > 8 || memcmp(e->b, b, sizeof e->b)) continue;
+        if (abs(e->x - x) <= tol && abs(e->y - y) <= tol && abs(e->w - w) <= tol) return 1;
+    }
+    return 0;
+}
+static void seen_add(const s16* b, s32 x, s32 y, s32 w) {
+    SeenBox* e = &g_seen[g_seen_next]; g_seen_next = (g_seen_next + 1) % SEEN_MAX;
+    memcpy(e->b, b, sizeof e->b); e->x = x; e->y = y; e->w = w; e->frame = g_frame;
+}
 void gpu3d_debug_proj(void) {
     fprintf(stderr, "proj:"); for (int i = 0; i < 16; i++) fprintf(stderr, " %08x", (u32)m_proj[i]); fprintf(stderr, "\n");
 }
@@ -574,17 +599,60 @@ static void box_test(const u32* p) {
     }
     static const int faces[6][4] = { { 0, 1, 2, 3 }, { 4, 5, 6, 7 }, { 0, 3, 4, 5 }, { 1, 2, 7, 6 }, { 0, 1, 6, 5 }, { 2, 3, 4, 7 } };
     g_box_tests++;
+    g_newobj_hide = 0;                                               /* (the previous object's polygons end here) */
+    const s16 bkey[6] = { x0, y0, z0, (s16)(x1 - x0), (s16)(y1 - y0), (s16)(z1 - z0) };
+    s32 bx = m_clip[12], by = m_clip[13], bw = m_clip[15];
+    static long long bd0 = -2, bd1; if (bd0 == -2) { const char* e = getenv("DQIX_BOXDUMP"); bd0 = -1; if (e) sscanf(e, "%lld,%lld", &bd0, &bd1); }
+    int dump = bd0 >= 0 && (long long)g_frame >= bd0 && (long long)g_frame <= bd1;
+    if (dump) {   /* DQIX_BOXDUMP=first,last: every box test then, with where its box is (x/w, y/w) and the result (tests) */
+        double mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9; int behind = 0;
+        for (int i = 0; i < 8; i++) { double w = cube[i].pos[3]; if (w <= 0) { behind++; continue; }
+            double x = cube[i].pos[0] / w, y = cube[i].pos[1] / w; if (x < mnx) mnx = x; if (x > mxx) mxx = x; if (y < mny) mny = y; if (y > mxy) mxy = y; }
+        fprintf(stderr, "boxdump f%llu poly %u box %d,%d,%d +%d,%d,%d x %.2f..%.2f y %.2f..%.2f behind %d trans %d,%d,%d",
+                (unsigned long long)g_frame, g_wide_side > 0 ? n_wpoly : n_poly, x0, y0, z0, x1 - x0, y1 - y0, z1 - z0, mnx, mxx, mny, mxy, behind,
+                m_clip[12], m_clip[13], m_clip[15]);
+    }
     for (int f = 0; f < 6; f++) {
         for (int k = 0; k < 4; k++) face[k] = cube[faces[f][k]];
-        if (clip_polygon(face, 4, 0, 0) > 0) { gxstat |= 2; g_box_in++; return; }
+        if (clip_polygon(face, 4, 0, 0) > 0) { gxstat |= 2; g_box_in++; seen_add(bkey, bx, by, bw); if (dump) fprintf(stderr, " -> in\n"); return; }
     }
     if (g_wide_cull > 0 && viewport[0] == 0 && viewport[4] == 256) {   /* out of the DS's view: in the wide one? */
         for (int i = 0; i < 8; i++) cube[i].pos[0] = (s32)(((s64)cube[i].pos[0] * 256) / (256 + 2 * g_wide_cull));
         for (int f = 0; f < 6; f++) {
             for (int k = 0; k < 4; k++) face[k] = cube[faces[f][k]];
-            if (clip_polygon(face, 4, 0, 0) > 0) { gxstat |= 2; g_box_in++; g_box_widened++; return; }
+            if (clip_polygon(face, 4, 0, 0) > 0) {
+                gxstat |= 2; g_box_in++; g_box_widened++;
+                g_newobj_hide = !seen_before(bkey, bx, by, bw);
+                seen_add(bkey, bx, by, bw);
+                if (dump) fprintf(stderr, " -> widened%s\n", g_newobj_hide ? " (new: hidden this frame)" : "");
+                return;
+            }
         }
     }
+    {   /* Very large objects (the turnstile in Gortress prison): their beams reach far
+         * outside the box the game tests, so in the wide picture they popped into view
+         * in the middle of it. Such a box counts as in view a good way further out
+         * (three DS widths, twice the height): the object is then already there
+         * before any of it can show. */
+        int big = (x1 - x0) >= 16384 || (y1 - y0) >= 16384 || (z1 - z0) >= 16384;
+        static long long big_from = -2;                          /* DQIX_BIG_FROM=frame: only from then (tests: replays of older reports) */
+        if (big_from == -2) { const char* e = getenv("DQIX_BIG_FROM"); big_from = e ? atoll(e) : 0; }
+        if ((long long)g_frame < big_from) big = 0;
+        if (big && g_wide_cull > 0 && viewport[0] == 0 && viewport[4] == 256) {
+            for (int i = 0; i < 8; i++) { cube[i].pos[0] /= 3; cube[i].pos[1] /= 2; }   /* (x was already scaled for the wide view) */
+            for (int f = 0; f < 6; f++) {
+                for (int k = 0; k < 4; k++) face[k] = cube[faces[f][k]];
+                if (clip_polygon(face, 4, 0, 0) > 0) {
+                    gxstat |= 2; g_box_in++; g_box_widened++;
+                    g_newobj_hide = !seen_before(bkey, bx, by, bw);
+                    seen_add(bkey, bx, by, bw);
+                    if (dump) fprintf(stderr, " -> big%s\n", g_newobj_hide ? " (new: hidden this frame)" : "");
+                    return;
+                }
+            }
+        }
+    }
+    if (dump) fprintf(stderr, " -> out\n");
 }
 
 /* ---------------------------------------------------------------- commands */
@@ -1556,6 +1624,7 @@ void video_needed(void) {
     g_video_hidden = 0;
     if (g_renderer3d == &g_hidden3d) g_renderer3d = NULL;
 }
+static int g_gl_pending;                 /* a new list for the GPU renderer, drawn at scanline 215 */
 static int g_render_pending;                                        /* a render is due at line 215 */
 
 static int ysort_cmp(const void* a, const void* b) {
@@ -1568,6 +1637,10 @@ static int ysort_cmp(const void* a, const void* b) {
 static Poly g_gl_polys[POLY_MAX];
 static const Poly* g_gl_order[POLY_MAX];
 static void gl_frame(void) {
+    {   static long long from = -2;                              /* DQIX_PRESENT_FROM=frame: no 3D drawn before it (tests: fast replays) */
+        if (from == -2) { const char* e = getenv("DQIX_PRESENT_FROM"); from = e ? atoll(e) : -1; }
+        if (from >= 0 && g_frame + 2 < (uint64_t)from) return;
+    }
     int n = 0, nop = 0;
     HPoly** list = render_list; u32 count = render_n;
     if (w_render_side > 0) { list = wrender_list; count = wrender_n; }
@@ -1626,6 +1699,25 @@ void gpu3d_vblank(void) {
         }
         static int lg = -1; if (lg < 0) lg = getenv("DQIX_SWAPLOG") != NULL;
         if (lg) fprintf(stderr, "swap %llu\n", (unsigned long long)g_frame);
+        {   /* DQIX_POLYDUMP=first,last: every polygon of the frames made then, to polys<frame>.txt (tests) */
+            static long long pd0 = -2, pd1; if (pd0 == -2) { const char* e = getenv("DQIX_POLYDUMP"); pd0 = -1; if (e) sscanf(e, "%lld,%lld", &pd0, &pd1); }
+            if (pd0 >= 0 && (long long)g_frame >= pd0 && (long long)g_frame <= pd1) {
+                char path[64]; snprintf(path, sizeof path, "polys%llu.txt", (unsigned long long)g_frame);
+                FILE* f = fopen(path, "w");
+                if (f) {
+                    /* in the order they were sent (the box tests' log, DQIX_BOXDUMP, counts them the same way) */
+                    u32 N = w_render_side ? n_wpoly : n_poly;
+                    fprintf(f, "frame %llu side %d n %u boxes %u in %u widened %u\n", (unsigned long long)g_frame, w_render_side, N, g_box_tests, g_box_in, g_box_widened);
+                    for (u32 i = 0; i < N; i++) {
+                        HPoly* h = w_render_side ? &wcur_pram[i] : &cur_pram[i];
+                        fprintf(f, "%u t%d attr %08x tex %08x pal %04x n %u:", i, h->translucent, h->attr, h->texparam, h->texpal, h->n);
+                        for (u32 k = 0; k < h->n; k++) fprintf(f, " (%d,%d w%d)", h->v[k]->hpos[0] >> 4, h->v[k]->hpos[1] >> 4, h->w[k]);
+                        fprintf(f, "\n");
+                    }
+                    fclose(f);
+                }
+            }
+        }
     }
     r_disp = IO16_(0x060);
     r_alpharef = (r_disp & (1 << 2)) ? (IO8_(0x340) & 0x1F) : 0;
@@ -1648,7 +1740,12 @@ void gpu3d_vblank(void) {
         n_vtx = 0; n_poly = 0; n_opaque = 0;
         flush_request = 0;
     }
-    if (g_renderer3d && new_list) gl_frame();
+    /* the GPU renderer draws the new list at scanline 215 (gpu3d_render_start),
+     * like the DS, which starts drawing at 214: the textures the game changes
+     * in this vblank (a sprite's next picture) belong to this list. Drawing here,
+     * before the game's vblank work, paired new positions with old pictures for
+     * a frame (sleeping people's poses flickering as the camera turned). */
+    if (g_renderer3d && new_list) g_gl_pending = 1;
     g_render_pending = 1;
 }
 
@@ -1656,7 +1753,9 @@ void gpu3d_vblank(void) {
 void gpu3d_render_start(void) {
     if (!g_render_pending) return;
     g_render_pending = 0;
+    if (g_renderer3d && g_gl_pending) { g_gl_pending = 0; gl_frame(); }
     if (g_renderer3d && !g_renderer3d_verify) return;
+    { extern int draw_skipped(void); if (draw_skipped()) return; }  /* DQIX_PRESENT_FROM (fast replays) */
     double t0 = ms_now();
     render_frame();
     g_t3d_ms += ms_now() - t0;

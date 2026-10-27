@@ -46,3 +46,5 @@ upload-to-github.bat
 /rom/last-rom.txt
 # the in-game updater's working folder (downloads, the previous version)
 /update/
+# a test build Claude puts here for trying a fix (not part of the project)
+/testbuild/

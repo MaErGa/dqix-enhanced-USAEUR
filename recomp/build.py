@@ -17,7 +17,54 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-import yaml
+try:
+    import yaml                      # optional: the files below are simple enough to read without it
+except ImportError:
+    yaml = None
+
+
+def _scalar(v):
+    v = v.strip()
+    if v in ("true", "false"):
+        return v == "true"
+    try:
+        return int(v, 0)
+    except ValueError:
+        return v
+
+
+def load_simple_yaml(path):
+    """The YAML files tools/extract_rom.py writes: top-level "key: value"
+    lines, and lists of mappings ("- key: value" then "  key: value"). PyYAML
+    is used when it is installed; this keeps the build working without it
+    (a missing yaml module stopped some Windows builds)."""
+    if yaml is not None:
+        with open(path) as f:
+            return yaml.safe_load(f)
+    root, cur_list, cur_item = {}, None, None
+    with open(path) as f:
+        for raw in f:
+            line = raw.rstrip("\n")
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            if line.startswith("- ") or line.startswith("  "):
+                if cur_list is None:
+                    raise ValueError(f"{path}: list item outside a list: {line!r}")
+                body = line[2:]
+                if line.startswith("- "):
+                    cur_item = {}
+                    cur_list.append(cur_item)
+                k, _, v = body.partition(":")
+                cur_item[k.strip()] = _scalar(v)
+                continue
+            k, _, v = line.partition(":")
+            if v.strip() == "":
+                cur_list = root[k.strip()] = []
+                cur_item = None
+            else:
+                root[k.strip()] = _scalar(v)
+                cur_list = None
+    return root
 
 sys.path.insert(0, os.path.dirname(__file__))
 from insn import (BRANCH, CALL, CALL_REG, EXC_RET, JUMP_REG, JUMPTABLE, RET, SEQ, STOP,  # noqa: E402
@@ -152,7 +199,7 @@ def load_relocs(mod, path):
 def load_modules(extract, config):
     mods = []
     rd = lambda p: open(os.path.join(extract, p), "rb").read()
-    y = lambda p: yaml.safe_load(open(os.path.join(extract, p)))
+    y = lambda p: load_simple_yaml(os.path.join(extract, p))
     main = Module("main", -1, y("arm9/arm9.yaml")["base_address"], rd("arm9/arm9.bin"))
     load_symbols(main, os.path.join(config, "symbols.txt"))
     load_relocs(main, os.path.join(config, "relocs.txt"))

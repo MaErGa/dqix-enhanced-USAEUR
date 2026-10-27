@@ -1,5 +1,6 @@
 /* Game card: ROM reads (both CPUs) and the save chip on the backup SPI bus.
  * Registers 0x040001A0-0x040001AF live in g_io and are shared by the CPUs. */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -31,6 +32,68 @@ static void wait_for_word(void) {
     if (now < ready) time_spend((uint32_t)(ready - now));
 }
 
+/* ---------------------------------------------------------------- what is being loaded
+ * Which scene the game is in, from the files it reads off the card: the map
+ * (data/map/<NAME>.*) and a movie while one plays (data/movie/<NAME>). The
+ * frontend uses it for scenes that need their own widescreen treatment. The
+ * names come from the ROM's own file table (nothing kept here). */
+char g_scene_map[32], g_scene_movie[32];
+uint64_t g_scene_movie_frame;                 /* when the movie last read data */
+typedef struct { uint32_t start, end; uint16_t kind; char name[26]; } SceneFile;   /* kind: 1 map, 2 movie */
+static SceneFile* g_sfiles; static int g_nsfiles = -1;
+static int sfile_cmp(const void* a, const void* b) { uint32_t x = ((const SceneFile*)a)->start, y = ((const SceneFile*)b)->start; return x < y ? -1 : x > y; }
+static void scene_walk(uint32_t fnt, uint32_t fat, uint16_t dir, const char* path, int depth) {
+    if (depth > 8 || fnt + (dir & 0xFFF) * 8u + 8 > g_rom_size) return;
+    uint32_t sub; uint16_t first; memcpy(&sub, g_rom + fnt + (dir & 0xFFF) * 8, 4); memcpy(&first, g_rom + fnt + (dir & 0xFFF) * 8 + 4, 2);
+    uint32_t p = fnt + sub; uint16_t fid = first;
+    while (p < g_rom_size) {
+        uint8_t b = g_rom[p++]; if (!b) break;
+        int l = b & 0x7F; if (p + (uint32_t)l + 2 > g_rom_size) break;
+        char name[128]; memcpy(name, g_rom + p, (size_t)l); name[l] = 0; p += (uint32_t)l;
+        char full[256]; snprintf(full, sizeof full, "%s%s", path, name);
+        if (b & 0x80) {
+            uint16_t sid; memcpy(&sid, g_rom + p, 2); p += 2;
+            char np[256]; snprintf(np, sizeof np, "%s/", full);
+            scene_walk(fnt, fat, sid, np, depth + 1);
+            continue;
+        }
+        /* places: data/map/<letter><digits>... (not its lists: ats_*, maplist, mapname); movies: *.mods */
+        int kind = !strncmp(full, "data/map/", 9) && full[9] >= 'A' && full[9] <= 'Z' && full[10] >= '0' && full[10] <= '9' ? 1
+                 : !strncmp(full, "data/movie/", 11) && strstr(full, ".mods") ? 2 : 0;
+        if (kind && fat + fid * 8u + 8 <= g_rom_size) {
+            SceneFile f; memcpy(&f.start, g_rom + fat + fid * 8, 4); memcpy(&f.end, g_rom + fat + fid * 8 + 4, 4); f.kind = (uint16_t)kind;
+            const char* base = full + (kind == 1 ? 9 : 11);
+            snprintf(f.name, sizeof f.name, "%s", base);
+            if (kind == 1) { char* dot = strchr(f.name, '.'); if (dot) *dot = 0; }   /* a map's files share its name */
+            SceneFile* n = realloc(g_sfiles, sizeof(SceneFile) * (size_t)(g_nsfiles + 1));
+            if (n) { g_sfiles = n; g_sfiles[g_nsfiles++] = f; }
+        }
+        fid++;
+    }
+}
+static void scene_note_read(uint32_t addr) {
+    if (g_nsfiles < 0) {
+        g_nsfiles = 0;
+        if (g_rom_size < 0x50) return;
+        uint32_t fnt, fat; memcpy(&fnt, g_rom + 0x40, 4); memcpy(&fat, g_rom + 0x48, 4);
+        scene_walk(fnt, fat, 0xF000, "", 0);
+        if (g_nsfiles) qsort(g_sfiles, (size_t)g_nsfiles, sizeof(SceneFile), sfile_cmp);
+    }
+    int lo = 0, hi = g_nsfiles - 1, at = -1;
+    while (lo <= hi) { int m = (lo + hi) / 2; if (g_sfiles[m].start <= addr) { at = m; lo = m + 1; } else hi = m - 1; }
+    if (at < 0 || addr >= g_sfiles[at].end) return;
+    const SceneFile* f = &g_sfiles[at];
+    static int lg = -1; if (lg < 0) lg = getenv("DQIX_SCENELOG") != NULL;
+    if (f->kind == 1 && strcmp(g_scene_map, f->name)) {
+        snprintf(g_scene_map, sizeof g_scene_map, "%s", f->name);
+        if (lg) fprintf(stderr, "scene f%llu: map %s\n", (unsigned long long)g_frame, g_scene_map);
+    } else if (f->kind == 2) {
+        if (strcmp(g_scene_movie, f->name) && lg) fprintf(stderr, "scene f%llu: movie %s\n", (unsigned long long)g_frame, f->name);
+        snprintf(g_scene_movie, sizeof g_scene_movie, "%s", f->name);
+        g_scene_movie_frame = g_frame;
+    }
+}
+
 static void rom_start(Core* k, uint32_t ctl) {
     const uint8_t* cmd = &g_io[0x1A8];
     uint32_t bs = (ctl >> 24) & 7;
@@ -43,6 +106,7 @@ static void rom_start(Core* k, uint32_t ctl) {
     g_card_t0 = time_cycles() + (uint64_t)g_card_xfer * (cmddelay + 4);
     if (cmd[0] == 0xB7) {
         uint32_t addr = ((uint32_t)cmd[1] << 24) | (cmd[2] << 16) | (cmd[3] << 8) | cmd[4];
+        if (len) scene_note_read(addr);
         for (uint32_t i = 0; i < len; i++) {
             uint32_t a = addr + i;
             if (a < 0x8000) a = 0x8000 + (a & 0x1FF);
@@ -139,26 +203,6 @@ void backup_flush(void) {
     g_backup_dirty = 0;
 }
 
-/* An imported save (saveimport.c) takes the place of the one in use. The one it replaces is kept
- * next to it, as <save>.before-import-<date and time>, so nothing is lost. */
-int backup_replace(const uint8_t* data, uint32_t n) {
-    if (n > BACKUP_MAX || !g_backup_path[0]) return -1;
-    char keep[1200]; char stamp[32]; time_t now = time(NULL);
-    strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", localtime(&now));
-    snprintf(keep, sizeof keep, "%s.before-import-%s", g_backup_path, stamp);
-    FILE* f = fopen(keep, "wb");
-    if (!f) return -1;
-    size_t w = fwrite(g_backup, 1, g_backup_size, f);
-    fclose(f);
-    if (w != g_backup_size) return -1;
-    memset(g_backup, 0xFF, sizeof g_backup);
-    memcpy(g_backup, data, n);
-    g_backup_size = n;
-    g_backup_dirty = 1;
-    backup_flush();
-    return g_backup_dirty ? -1 : 0;
-}
-
 /* ---------------------------------------------------------------- downloadable content
  * DQIX's downloadable quests and special guests are on the cartridge; Nintendo
  * Wi-Fi Connection only switched them on. The switches are in the save: one
@@ -190,6 +234,24 @@ static int slot_valid(const uint8_t* b) {
     for (int i = 0; i < 3; i++) if (rd32(b + ck[i][0]) != crc32_buf(b + ck[i][1], (size_t)(ck[i][2] - ck[i][1]))) return 0;
     return 1;
 }
+/* Import / export (Game > Save file): how many of a save image's two adventure
+ * slots are real DQIX saves (0: not a DQIX save), and swapping the save for
+ * another one (written to the save file at once). */
+int backup_check_image(const uint8_t* img, uint32_t size) {
+    int n = 0;
+    for (uint32_t s = 0; s + SLOT_SIZE <= size && s < 2 * SLOT_SIZE; s += SLOT_SIZE) n += slot_valid(img + s);
+    return n;
+}
+void backup_replace(const uint8_t* img, uint32_t size) {
+    if (size > BACKUP_MAX) size = BACKUP_MAX;
+    memset(g_backup, 0xFF, sizeof g_backup);
+    memcpy(g_backup, img, size);
+    if (size > g_backup_size) g_backup_size = size;
+    g_backup_dirty = 1;
+    backup_flush();
+}
+const char* backup_path(void) { return g_backup_path; }
+
 static int unlock_image(uint8_t* img, uint32_t size) {
     int n = 0;
     for (uint32_t s = 0; s + SLOT_SIZE <= size && s < 2 * SLOT_SIZE; s += SLOT_SIZE) {

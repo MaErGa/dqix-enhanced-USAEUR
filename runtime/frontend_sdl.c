@@ -35,6 +35,8 @@
 #include "nds.h"
 #include "frontend.h"
 #include "gl_render.h"
+#include "music.h"
+#include "text_hd.h"
 #include "menu.h"
 #include "i18n.h"
 #include "version.h"
@@ -66,14 +68,20 @@ static SDL_Window* g_win2;                                        /* ...the seco
 static int g_win2_full, g_win2_rect[4];                           /* ...fullscreen; where it was as a window (w = 0: not yet) */
 static int g_wide_pop;                                            /* widescreen: the small screen in its own window (the field alone) */
 static int g_smooth = 0;                                          /* Enhanced: smooth (filtered) textures */
+static int g_tex_pack = 1, g_tex_up = 0, g_tex_dump = 0;           /* Mods (gl_render.c) */
+static int g_mus_pack = 1, g_mus_names = 0, g_mus_vol = 70;      /* Mods: music packs (music.c) */
+static int g_hd_text = 0;                                            /* Enhanced: the game's letters redrawn at full resolution (text_hd.h) */
 static int g_res_auto = 1;                                        /* 3D resolution: as sharp as the screen shows it (else g_scale3d) */
 static int g_small_opacity = 50;                                  /* widescreen: how solid the small screen over the field is (O), % */
-static int g_wide_dyn;                                            /* widescreen: 0 basic (the corner stays), 1 dynamic (experimental: slides for menus) */
+static int g_wide_dyn;                                            /* widescreen: 0 basic (the corner stays), 1 dynamic (experimental: the game's windows move right) */
 static int g_small_corner;                                        /* basic widescreen: 0 top left, 1 top right, 2 bottom right, 3 bottom left */
 static int g_small_size = 1;                                      /* ...0 small, 1 medium, 2 large */
 static int g_small_hide;                                          /* widescreen: no small screen (left trigger / U) */
 static int g_peek;                                                /* widescreen: the other screen big while the swap button is held */
 static int g_single;                                              /* one screen only (the bottom one, or the top one swapped) */
+static int g_hud = 0;                                             /* widescreen battles: the party's panels and the commands over the 3D (hud_update) */
+static int g_hud_n, g_hud_band[8][2];                             /* ...the panels found on the commands screen: first row, end row */
+static int g_hud_win[4];                                          /* ...or a window alone there (experience, level up): x, y, w, h (w 0: none) */
 static int g_volume = 100, g_mute;                                /* Game > Volume */
 static char g_notice[160]; static uint64_t g_notice_until;        /* a short message in the title bar */
 static float g_small_alpha = 1.0f;                                /* ...as shown now (solid while the mouse is on it) */
@@ -242,7 +250,7 @@ static void scene_rules_load(void) {
     while (fgets(line, sizeof line, f) && g_n_user_rules < 128) {
         char w[16], k[16], n[64];
         if (line[0] == '#' || sscanf(line, "%15s %15s %63s", w, k, n) != 3) continue;
-        SceneRule r = { !strcmp(w, "stacked") ? 's' : !strcmp(w, "bars") ? 'b' : 0, !strcmp(k, "movie") ? 'v' : !strcmp(k, "map") ? 'm' : 0, "" };
+        SceneRule r = { !strcmp(w, "stacked") ? 's' : !strcmp(w, "bars") ? 'b' : !strcmp(w, "wide") ? 'w' : 0, !strcmp(k, "movie") ? 'v' : !strcmp(k, "map") ? 'm' : 0, "" };
         if (!r.what || !r.kind) continue;
         snprintf(r.name, sizeof r.name, "%s", n);
         g_user_rules[g_n_user_rules++] = r;
@@ -256,12 +264,18 @@ static int scene_rule(void) {                                     /* 0, 'b' or '
         const char* name = pass == 0 ? (scene_movie_playing() ? g_scene_movie : NULL) : g_scene_map;
         char kind = pass == 0 ? 'v' : 'm';
         if (!name || !name[0]) continue;
-        for (int i = 0; i < g_n_user_rules; i++) if (g_user_rules[i].kind == kind && !strcmp(g_user_rules[i].name, name)) return g_user_rules[i].what;
+        for (int i = 0; i < g_n_user_rules; i++) if (g_user_rules[i].kind == kind && !strcmp(g_user_rules[i].name, name)) return g_user_rules[i].what == 'w' ? 0 : g_user_rules[i].what;
         for (int i = 0; SCENE_RULES[i].what; i++) if (SCENE_RULES[i].kind == kind && !strcmp(SCENE_RULES[i].name, name)) return SCENE_RULES[i].what;
+        /* A movie (the game's animated cutscenes) is one picture over both screens:
+         * shown stacked, as on the DS, unless widescreen.txt says "wide movie NAME" */
+        if (pass == 0) return 's';
     }
     return 0;
 }
 static int g_scene_stack;                                         /* this frame: show stacked (both screens are one picture) */
+static int g_ui_plain;                                            /* dynamic widescreen: a menu screen of its own: the DS's picture as it is, 4:3 at the right */
+static int g_hud_right;                                            /* the battle panels' right edge on the canvas (0: none) */
+static uint64_t g_last_battle;                                    /* the frame the battle panels were last seen */
 static void notice(const char* fmt, ...);
 /* Modern > "Widescreen: black sides in this place": add or remove this map in widescreen.txt */
 static void scene_toggle_bars(void) {
@@ -276,10 +290,19 @@ static void scene_toggle_bars(void) {
     }
     FILE* f = fopen("widescreen.txt", "w"); if (!f) return;
     fprintf(f, "# Scenes with their own widescreen (Modern > Widescreen: black sides in this place).\n");
-    fprintf(f, "# bars map NAME: black sides in that place; stacked movie NAME: both screens stacked while it plays.\n");
+    fprintf(f, "# bars map NAME: black sides in that place; stacked movie NAME: both screens stacked while it plays\n# (movies are stacked anyway); wide movie NAME: that movie widescreen instead.\n");
     for (int i = 0; i < g_n_user_rules; i++)
         fprintf(f, "%s %s %s\n", g_user_rules[i].what == 's' ? "stacked" : "bars", g_user_rules[i].kind == 'v' ? "movie" : "map", g_user_rules[i].name);
     fclose(f);
+}
+
+/* Is the Alchemimicon (the recipe book, overlay 6) open? Its recipe list is on the
+ * bottom screen: shown big instead (DQIX_NO_ALCHEMY_SWAP: tests, not). */
+static int alchemimicon_open(void) {
+    static int off = -1; if (off < 0) off = getenv("DQIX_NO_ALCHEMY_SWAP") != NULL;
+    if (off) return 0;
+    extern uint64_t overlays_loaded_mask(void); extern int gpu3d_poly_count(void);
+    return ((overlays_loaded_mask() >> 6) & 1) && gpu3d_poly_count() == 0;   /* (not the Krak Pot, which has it too: its pot is 3D) */
 }
 
 /* Widescreen: DS pixels to add left and right of the 3D picture. 16:9 in a
@@ -301,30 +324,33 @@ static void canvas_layout_for(GlPresent* v, int ww, int wh, int second) {
     int wide = g_gl && g_wide && !g_side_by_side && !two && !g_scene_stack;
     int single = g_single && !wide;                               /* one screen (in widescreen the left trigger hides the small one instead) */
     int corner = g_gl && g_corner && !g_side_by_side && !wide && !two && !single;
-    int shell = g_gl && g_opt.shell && !g_side_by_side && !corner && !wide && !two && !single;
+    int shell = g_gl && g_opt.shell && !g_side_by_side && !corner && !wide && !two && !single && !(g_wide && g_scene_stack);   /* (a movie in widescreen: plain stacked, no console) */
     int side = 0, which = -1;
     if (g_gl) which = gl_wide_shown(&side);                       /* how the last picture was composed */
+    int flip = alchemimicon_open();                               /* the Alchemimicon: its recipe list (the bottom screen) big */
     v->topx[0] = v->botx[0] = (float)side; v->topx[1] = v->botx[1] = 256;
     if (wide) {
         /* Modern: the screen with the 3D (the field, or the battle) fills the
          * window, wider than the DS's; the other screen sits small in a corner
          * over it, like a minimap (see-through: O).
          * Basic: in the corner the player picks (K) at the size they pick (I).
-         * Dynamic (experimental): top left; when the game shows 2D there
-         * (menus, the title) the field slides over to make room: the corner
-         * layout, in the same window (g_wide_mix, from wide_update()); in
-         * battles the commands sit at half size.
+         * Dynamic (experimental): the map top left; the field never moves:
+         * the game's windows move right instead (gpu3d.c, ui_shift_classify;
+         * a screen without 3D sits at the right); in battles the party's
+         * panels sit stacked in the bottom left (the battle HUD, always on),
+         * cut to their names and HP/MP while the attacks play.
          * Left trigger / U hides the small screen; holding the swap button
          * shows it big in the middle (g_peek). */
         float S = (float)wide_side_target();
         int pop = g_wide_pop;                                     /* the small screen in the second window */
         int dyn = g_wide_dyn && !pop && !g_small_hide && !g_peek;
-        float t = which == 0 || !dyn ? 1.0f : g_wide_mix * g_wide_mix * (3 - 2 * g_wide_mix);   /* eased */
+        float t = 1.0f;                                           /* (the field no longer slides: the game's windows move instead, gl_set_ui_shift) */
         v->cw = 256 + 2 * S; v->ch = 192;
-        float* big = which == 0 ? v->top : v->bot, *small = which == 0 ? v->bot : v->top;
-        float* bigx = which == 0 ? v->topx : v->botx;
-        float wx0 = S, wtx0 = (float)side, ww = 256;              /* wide: the field (or, without 3D, the DS's picture) */
-        if (which >= 0) { wx0 = S - (float)side; wtx0 = 0; ww = 256 + 2 * (float)side; }
+        int topbig = (which == 0) != flip;
+        float* big = topbig ? v->top : v->bot, *small = topbig ? v->bot : v->top;
+        float* bigx = topbig ? v->topx : v->botx;
+        float wx0 = dyn ? 2 * S : S, wtx0 = (float)side, ww = 256;   /* wide: the field (or, without 3D, the DS's picture: dynamic, at the right) */
+        if (which >= 0 && !flip && !(dyn && g_ui_plain)) { wx0 = S - (float)side; wtx0 = 0; ww = 256 + 2 * (float)side; }   /* (a submenu: 4:3, at the right, black beside it) */
         float cx0 = v->cw - 256, ctx0 = (float)side, cww = 256;   /* corner: the DS's picture at the right */
         big[0] = cx0 + (wx0 - cx0) * t; big[2] = cww + (ww - cww) * t;
         bigx[0] = ctx0 + (wtx0 - ctx0) * t; bigx[1] = big[2];
@@ -335,8 +361,9 @@ static void canvas_layout_for(GlPresent* v, int ww, int wh, int second) {
             small[2] = SW[z]; small[3] = SH[z];
             small[0] = c == 0 || c == 3 ? 2 : v->cw - small[2] - 2;
             small[1] = c < 2 ? 2 : 192 - small[3] - 2;
-        } else if (which == 0) { small[2] = 128; small[3] = 96; small[0] = small[1] = 2; }   /* battles: top left, over the sky */
-        else { small[0] = small[1] = 2 * t; small[2] = 256.0f / 3; small[3] = 64; }
+        } else if (which == 0 && !dyn) { small[2] = 128; small[3] = 96; small[0] = small[1] = 2; }   /* battles: top left, over the sky */
+        else if (which == 0 && g_last_battle && g_frame - g_last_battle < 60 * 10) small[2] = small[3] = 0;   /* dynamic, battles: the panels only, no small screen */
+        else { small[0] = 0; small[1] = 2; small[2] = 256.0f / 3; small[3] = 64; }   /* top left; the windows start right of it */
         if (g_small_blank && t > 0.99f) small[2] = small[3] = 0;   /* black (battle intros, fades): leave the field whole */
         v->front = small == v->bot;                               /* the small one in front */
         v->alpha = 1.0f + (g_small_alpha - 1.0f) * t;            /* see-through (O) while it is over the field */
@@ -346,6 +373,46 @@ static void canvas_layout_for(GlPresent* v, int ww, int wh, int second) {
             v->alpha = 1.0f;
             if (second) { v->cw = 256; v->ch = 192; big[0] = big[1] = big[2] = big[3] = 0; small[0] = small[1] = 0; small[2] = 256; small[3] = 192; }
             else small[0] = small[1] = small[2] = small[3] = 0;
+        }
+        if (which == 0 && (g_hud_n > 0 || g_hud_win[2]) && !g_peek && !(g_small_hide && !pop)) {
+            /* Battle HUD: the commands screen cut into its panels, over the 3D,
+             * stacked in the bottom left at half size: the one whose turn it
+             * is (the tall panel, with the commands) on top, the others below
+             * it in the party's order.
+             * The map window keeps the last map (gl_hold() in present_gl). */
+            if (second) {
+                if (pop) { v->held = 1; v->bot[0] = v->bot[1] = v->bot[2] = v->bot[3] = 0; v->top[0] = v->top[1] = 0; v->top[2] = 256; v->top[3] = 192; v->topx[0] = (float)side; v->topx[1] = 256; v->front = 0; }
+            } else {
+                small[0] = small[1] = small[2] = small[3] = 0;
+                if (g_hud_win[2]) {                                   /* a window alone: big, at the top in the middle */
+                    float* q = v->piece[v->npiece++], w = (float)g_hud_win[2], h = (float)g_hud_win[3], kw = fminf(1.0f, fminf(200.0f / w, 110.0f / h));
+                    q[4] = 1; q[5] = (float)g_hud_win[0]; q[6] = (float)g_hud_win[1]; q[7] = w; q[8] = h;
+                    q[2] = w * kw; q[3] = h * kw; q[0] = (v->cw - q[2]) / 2; q[1] = 6; q[9] = 0.7f;   /* (see-through like the panels) */
+                }
+                const float k = 0.5f, gap = 2, see = 0.7f;            /* half size; the fill 70% solid, white lines and letters solid */
+                float total = 0;
+                int tall = 0;
+                for (int i = 0; i < g_hud_n; i++) { total += (float)(g_hud_band[i][1] - g_hud_band[i][0]) * k + gap; if (g_hud_band[i][1] - g_hud_band[i][0] >= 50) tall = 1; }
+                float y = 192 - total;
+                for (int pass = 0; pass < 2; pass++)              /* the tall one first */
+                    for (int i = 0; i < g_hud_n && v->npiece + 2 <= GL_MAX_PIECES; i++) {
+                        float h = (float)(g_hud_band[i][1] - g_hud_band[i][0]);
+                        if ((h >= 50) == pass) continue;
+                        float* q = v->piece[v->npiece++];
+                        if (tall) {                                   /* choosing commands: the whole panels */
+                            q[4] = 1; q[5] = 6; q[6] = (float)g_hud_band[i][0]; q[7] = 244; q[8] = h;
+                            q[0] = 4; q[1] = y; q[2] = 244 * k; q[3] = h * k; q[9] = see;
+                        } else {                                      /* the attacks: each panel's name and HP/MP only (its third box left out), */
+                            q[4] = 1; q[5] = 6; q[6] = (float)g_hud_band[i][0]; q[7] = 113; q[8] = h;   /* with the panel's own right edge after them */
+                            q[0] = 4; q[1] = y; q[2] = 113 * k; q[3] = h * k; q[9] = see;
+                            float* e = v->piece[v->npiece++];
+                            e[4] = 1; e[5] = 241; e[6] = q[6]; e[7] = 9; e[8] = h;
+                            e[0] = q[0] + q[2]; e[1] = y; e[2] = 9 * k; e[3] = q[3]; e[9] = see;
+                        }
+                        y += q[3] + gap;
+                    }
+                if (!second) { g_hud_right = 0; for (int i = 0; i < v->npiece; i++) if (v->piece[i][1] > 96 && v->piece[i][0] + v->piece[i][2] > g_hud_right) g_hud_right = (int)(v->piece[i][0] + v->piece[i][2]); }
+            }
         }
     } else if (two || single) {
         v->cw = 256; v->ch = 192;                                /* one screen; the other is in the other window, or not shown */
@@ -377,9 +444,10 @@ static void canvas_layout_for(GlPresent* v, int ww, int wh, int second) {
     if (!wide) { v->top[2] = v->bot[2] = 256; v->top[3] = v->bot[3] = 192; }
     if (corner) { v->top[2] = 256.0f / 3; v->top[3] = 64; }
     if (two || single) {                                         /* this window's screen: the bottom one in the first, unless swapped */
-        float* off = (second ? !g_swap : g_swap) ? v->bot : v->top;
+        int sw = g_swap != flip;
+        float* off = (second ? !sw : sw) ? v->bot : v->top;
         off[0] = off[1] = off[2] = off[3] = 0;
-    } else if (g_swap && !wide) {                                /* F9: the screens trade places */
+    } else if ((g_swap != flip) && !wide) {                                /* F9: the screens trade places */
         for (int i = 0; i < 4; i++) { float t = v->top[i]; v->top[i] = v->bot[i]; v->bot[i] = t; }
         for (int i = 0; i < 2; i++) { float t = v->topx[i]; v->topx[i] = v->botx[i]; v->botx[i] = t; }
     }
@@ -418,10 +486,8 @@ static int g_session_port = SESSION_PORT;
 static int g_update_auto = 1;                    /* look for a new stable version at start */
 static int g_confirm_quit = 1;                   /* Esc / closing the window asks first */
 static char g_update_skip[32];                   /* ...but not this one (the player said so) */
-static char g_lang_setting[16] = "auto";       /* the language of the menus and messages: auto (the system's) or a code (i18n.h) */
-static char g_gamelang_setting[16] = "auto";   /* the language of the game's own text: auto (the system's) or one of GAMELANG_CODE */
-/* The languages of a DS's own setting that Dragon Quest IX has, as the DS numbers them 1 to 5 (0 is Japanese). */
-static const char* const GAMELANG_CODE[GAMELANG_COUNT] = { "en", "fr", "de", "it", "es" };
+static char g_ui_lang_setting[16] = "auto";    /* the language of the menus and messages: auto (the system's) or a code (i18n.h); settings.ini: interface_language */
+static int g_lang_key_seen;                    /* settings.ini has the game's language (`language`): else the first run follows the system */
 static int g_net_want = 1;                     /* the menu's "connect" check: on for a new install (settings.ini keeps each player's choice) */
 static const char* wfc_dns(void) {
     for (unsigned i = 0; i < sizeof WFC / sizeof WFC[0]; i++) if (!strcmp(g_wfc_server, WFC[i].key)) return WFC[i].dns;
@@ -454,6 +520,9 @@ static int g_color_chosen;
 static void default_console_color(void) {
     for (int i = 0; i < g_nskins; i++) if (!strcmp(g_skins[i].file + 6, "dslite_black.png")) g_opt.shell_color = N_DRAWN + i;
 }
+/* settings.ini's names for g_fw_language (1-5), and the menu's */
+static const char* const LANGUAGE_KEY[6] = { "", "english", "french", "german", "italian", "spanish" };
+static const char* const LANGUAGE_NAME[6] = { "", "English", "Fran\xc3\xa7" "ais", "Deutsch", "Italiano", "Espa\xc3\xb1ol" };
 static void settings_load(void) {
     FILE* f = fopen(SETTINGS, "r");
     if (!f) return;
@@ -470,8 +539,7 @@ static void settings_load(void) {
             continue;
         }
         if (!strcmp(key, "fast_speed")) { int v = atoi(val); g_fast_mult = (v == 2 || v == 4) ? v : 0; continue; }
-        if (!strcmp(key, "language")) { snprintf(g_lang_setting, sizeof g_lang_setting, "%s", val); continue; }
-        if (!strcmp(key, "game_language")) { snprintf(g_gamelang_setting, sizeof g_gamelang_setting, "%s", val); continue; }
+        if (!strcmp(key, "interface_language")) { snprintf(g_ui_lang_setting, sizeof g_ui_lang_setting, "%s", val); continue; }
         if (!strcmp(key, "update_check")) { g_update_auto = atoi(val) != 0; continue; }
         if (!strcmp(key, "confirm_quit")) { g_confirm_quit = atoi(val) != 0; continue; }
         if (!strcmp(key, "fast_forward")) { g_ff_hold = !strcmp(val, "hold"); continue; }
@@ -492,8 +560,18 @@ static void settings_load(void) {
         else if (!strcmp(key, "mute")) g_mute = atoi(val) != 0;
         else if (!strcmp(key, "swap_screens")) g_swap = atoi(val) != 0;
         else if (!strcmp(key, "widescreen_popout")) g_wide_pop = atoi(val) != 0;
+        else if (!strcmp(key, "widescreen_battle_hud")) g_hud = atoi(val) != 0;
         else if (!strcmp(key, "smooth_textures")) g_smooth = atoi(val) != 0;
         else if (!strcmp(key, "outlines")) g_gl_outline = !strcmp(val, "medium") ? 2 : !strcmp(val, "ds") ? 0 : 1;
+        else if (!strcmp(key, "soft_shadows")) g_gl_soft_alpha = atoi(val) != 0;
+        else if (!strcmp(key, "smooth_shading")) g_gl_soft_shade = atoi(val) != 0;
+        else if (!strcmp(key, "hd_text")) g_hd_text = atoi(val) != 0;
+        else if (!strcmp(key, "texture_packs")) g_tex_pack = atoi(val) != 0;
+        else if (!strcmp(key, "music_packs")) g_mus_pack = atoi(val) != 0;
+        else if (!strcmp(key, "music_song_names")) g_mus_names = atoi(val) != 0;
+        else if (!strcmp(key, "music_pack_volume")) { int v = atoi(val); if (v >= 0 && v <= 200) g_mus_vol = v; }
+        else if (!strcmp(key, "upscale_textures")) g_tex_up = atoi(val) != 0;
+        else if (!strcmp(key, "hd_text_shadows")) g_tx_shadows = atoi(val) != 0;
         else if (!strcmp(key, "small_screen_opacity")) { int v = atoi(val); if (v >= 10 && v <= 100) opacity_saved = v; }
         else if (!strcmp(key, "second_window")) { int r[4]; if (sscanf(val, "%d,%d,%d,%d", &r[0], &r[1], &r[2], &r[3]) == 4 && r[2] > 0 && r[3] > 0) memcpy(g_win2_rect, r, sizeof r); }
         else if (!strcmp(key, "second_window_fullscreen")) g_win2_full = atoi(val) != 0;
@@ -512,6 +590,7 @@ static void settings_load(void) {
         else if (!strcmp(key, "actual_size")) g_opt.actual = atoi(val) != 0;
         else if (!strcmp(key, "monitor_width_mm")) g_opt.monitor_width_mm = (float)atof(val);
         else if (!strcmp(key, "downloadable_content")) g_opt.dlc = atoi(val) != 0;
+        else if (!strcmp(key, "language")) { g_lang_key_seen = 1; for (int i = 1; i <= 5; i++) if (!strcmp(val, LANGUAGE_KEY[i])) g_fw_language = i; }
         else if (!strcmp(key, "wireless")) g_net_want = atoi(val) != 0;
         else if (!strcmp(key, "wfc_server")) snprintf(g_wfc_server, sizeof g_wfc_server, "%s", val);
         else if (!strcmp(key, "wireless_mac")) {
@@ -540,10 +619,7 @@ static void settings_save(void) {
     fprintf(f, "# language of the menus and messages: auto (your system's) or a code:");
     for (int i = 0; i < i18n_count(); i++) fprintf(f, " %s", i18n_code(i));
     fprintf(f, "\n");
-    fprintf(f, "language = %s\n", g_lang_setting);
-    fprintf(f, "# language of the game's own text: auto (your system's) or en, fr, de, it, es. It needs a ROM that has the\n");
-    fprintf(f, "# language (the European one has all five; the USA one is English only) and changes when the game starts again.\n");
-    fprintf(f, "game_language = %s\n", g_gamelang_setting);
+    fprintf(f, "interface_language = %s\n", g_ui_lang_setting);
     fprintf(f, "# mode: classic (exactly like the DS) or enhanced (sharper 3D on the graphics card). F5 switches.\n");
     fprintf(f, "mode = %s\n", g_classic ? "classic" : "enhanced");
     fprintf(f, "# 3D resolution in enhanced mode: 1 to 12, or auto (as sharp as the window shows it; F4)\n");
@@ -553,12 +629,32 @@ static void settings_save(void) {
     fprintf(f, "smooth_textures = %d\n", g_smooth);
     fprintf(f, "# enhanced above 1x: character outlines thin, medium or ds (the DS's own rule, thicker)\n");
     fprintf(f, "outlines = %s\n", g_gl_outline == 2 ? "medium" : g_gl_outline == 0 ? "ds" : "thin");
+    fprintf(f, "# enhanced above 1x: shadows, glows and light with soft edges as a smooth gradient: 0 or 1\n");
+    fprintf(f, "soft_shadows = %d\n", g_gl_soft_alpha != 0);
+    fprintf(f, "# enhanced above 1x: the shading on characters as a smooth ramp instead of the DS's steps: 0 or 1\n");
+    fprintf(f, "smooth_shading = %d\n", g_gl_soft_shade != 0);
+    fprintf(f, "# enhanced: HD text, the game's letters drawn again at full resolution from fonts/main.ttf and fonts/small.ttf: 0 or 1 (F1)\n");
+    fprintf(f, "hd_text = %d\n", g_hd_text);
+    fprintf(f, "# Mods: texture packs (PNGs in the textures folder drawn instead of the game's): 0 or 1\n");
+    fprintf(f, "texture_packs = %d\n", g_tex_pack);
+    fprintf(f, "# Mods: music packs (OGG / FLAC recordings in the music folder played instead of the game's songs): 0 or 1\n");
+    fprintf(f, "music_packs = %d\n", g_mus_pack);
+    fprintf(f, "# Mods: a notice with each song's name as it starts (to find which file replaces it): 0 or 1\n");
+    fprintf(f, "music_song_names = %d\n", g_mus_names);
+    fprintf(f, "# Mods: how loud the recordings are against the game's sounds, in %% (0 to 200)\n");
+    fprintf(f, "music_pack_volume = %d\n", g_mus_vol);
+    fprintf(f, "# Mods: the 3D textures upscaled 4x with xBR: 0 or 1\n");
+    fprintf(f, "upscale_textures = %d\n", g_tex_up);
+    fprintf(f, "# HD text: keep the letters' shadows and outlines (0: plain letters)\n");
+    fprintf(f, "hd_text_shadows = %d\n", g_tx_shadows);
     fprintf(f, "# widescreen: the small screen (map, battle commands) in a window of its own: 0 or 1\n");
     fprintf(f, "widescreen_popout = %d\n", g_wide_pop);
+    fprintf(f, "# widescreen battles (experimental): the party's panels and the commands stacked in the bottom left, over the 3D: 0 or 1\n");
+    fprintf(f, "widescreen_battle_hud = %d\n", g_hud);
     fprintf(f, "# window size: 1 to 8 times the DS screens (F3)\n");
     fprintf(f, "window_scale = %d\n", g_scale);
-    fprintf(f, "# stacked, side_by_side, corner (the top screen small beside the field), wide (widescreen),\n");
-    fprintf(f, "# wide_dynamic (widescreen that makes room for menus; experimental) or two_windows (one screen in each); F2\n");
+    fprintf(f, "# stacked, side_by_side, corner (the top screen small beside the field), wide (Basic Widescreen),\n");
+    fprintf(f, "# wide_dynamic (Dynamic Widescreen, experimental: the game's windows moved right of the map) or two_windows (one screen in each); F2\n");
     fprintf(f, "layout = %s\n", g_side_by_side ? "side_by_side" : g_wide ? (g_wide_dyn ? "wide_dynamic" : "wide") : g_corner ? "corner" : g_two ? "two_windows" : "stacked");
     fprintf(f, "# one screen only (U / left trigger): 0 or 1\n");
     fprintf(f, "single_screen = %d\n", g_single);
@@ -602,6 +698,8 @@ static void settings_save(void) {
     fprintf(f, "monitor_width_mm = %g\n", g_opt.monitor_width_mm);
     fprintf(f, "# switch on every downloadable quest and special guest at start, without connecting: 0 or 1\n");
     fprintf(f, "downloadable_content = %d\n", g_opt.dlc);
+    fprintf(f, "# the game's language (European version; the USA version is in English): english, french, german, italian or spanish\n");
+    fprintf(f, "language = %s\n", LANGUAGE_KEY[g_fw_language >= 1 && g_fw_language <= 5 ? g_fw_language : 1]);
     fprintf(f, "# Wireless menu: connect to a community Nintendo Wi-Fi Connection server: 0 or 1\n");
     fprintf(f, "wireless = %d\n", g_net_want);
     fprintf(f, "# which server: builtin (offline, the files in the wfc folder), altwfc, wiimmfi, or another's DNS address\n");
@@ -716,6 +814,10 @@ static int try_gl(void) {
     if (getenv("DQIX_SOFTALPHA")) g_gl_soft_alpha = atoi(getenv("DQIX_SOFTALPHA"));   /* tests */
     if (getenv("DQIX_SOFTSHADE")) g_gl_soft_shade = atoi(getenv("DQIX_SOFTSHADE"));   /* tests */
     gl_set_smooth(g_smooth);
+    if (getenv("DQIX_HDTEXT")) g_hd_text = atoi(getenv("DQIX_HDTEXT")) != 0;   /* tests */
+    gl_hd_fonts(getenv("DQIX_TXFONTS") ? getenv("DQIX_TXFONTS") : "fonts");   /* (tests: replays run elsewhere) */
+    gl_set_hd_text(g_hd_text);
+    gl_set_texture_pack(g_tex_pack); gl_set_tex_upscale(g_tex_up);
     if (!gl_render_init(g_res_auto ? (getenv("DQIX_AUTO_FROM") ? 2 : 4) : g_scale3d)) {
         fprintf(stderr, "OpenGL renderer failed to start: using the software renderer\n");
         SDL_GL_DeleteContext(g_glctx); SDL_DestroyWindow(g_win); g_win = NULL; return 0;
@@ -820,28 +922,20 @@ static void handle_events(void);
 static int g_cap_action;
 static void capture_key(SDL_Scancode k, Uint16 mod);
 /* ---------------------------------------------------------------- languages
- * Two different things: the language of this program (menus, messages: i18n.h) and
- * the language of the game's own text. The second is the DS's language setting, which
- * the game reads when it starts (io7.c, g_fw_language); the text itself comes from the
- * ROM, so it only changes with a ROM that has the language: the European Dragon Quest IX
- * has English, French, German, Italian and Spanish, the USA one only English, the
- * Japanese one only Japanese. */
-static int rom_region(void) { return g_rom ? g_rom[15] : 0; }          /* the game code's last letter: E USA, P Europe, J Japan */
-static int rom_has_game_language(int k) { return rom_region() == 'P' || (rom_region() == 'E' && k == 0); }
+ * The language of this program (the menus and messages: i18n.h) is separate from the language of the
+ * game's own text (Game > Language, the European version: g_fw_language). */
 static void apply_interface_language(void) {
     const char* env = getenv("DQIX_LANG");
     if (getenv("DQIX_NO_SETTINGS") && !env) return;                    /* tests: English */
-    const char* want = env && *env ? env : g_lang_setting;
+    const char* want = env && *env ? env : g_ui_lang_setting;
     int i = strcmp(want, "auto") ? i18n_find(want) : -1;
     i18n_set(i >= 0 ? i : i18n_detect());
 }
-static int game_language_for_rom(void) {
-    int region = rom_region();
-    if (region == 'J') return 0;
-    if (region != 'P' || getenv("DQIX_NO_SETTINGS") || getenv("DQIX_FW_REF")) return 1;   /* as always: English */
-    const char* code = strcmp(g_gamelang_setting, "auto") ? g_gamelang_setting : i18n_os_code();
-    for (int i = 0; i < GAMELANG_COUNT; i++) if (!strcmp(code, GAMELANG_CODE[i])) return i + 1;
-    return 1;
+/* The first run with the European version: the game starts in the system's language, if it has it. */
+static void first_run_game_language(void) {
+    if (g_lang_key_seen || !rom_is_eur() || getenv("DQIX_NO_SETTINGS")) return;
+    static const char* const CODE[5] = { "en", "fr", "de", "it", "es" };
+    for (int i = 0; i < 5; i++) if (!strcmp(i18n_os_code(), CODE[i])) g_fw_language = i + 1;
 }
 static void capture_pad(int pad);
 void frontend_init(int argc, char** argv) {
@@ -859,8 +953,9 @@ void frontend_init(int argc, char** argv) {
         if (!g_wireless.mac_set && !g_headless) { wireless_mac_new(); settings_save(); }
     }
     apply_interface_language();
-    g_fw_language = game_language_for_rom();                    /* read by firmware_init */
+    first_run_game_language();
     wireless_apply(1);                                          /* read by firmware_init */
+    if (!g_headless) { music_set_volume(g_mus_vol); music_enable(g_mus_pack); }   /* music packs (music.c; off in replays and sessions) */
     if (g_opt.dlc) backup_unlock_dlc();                        /* before the game reads the save */
     if (getenv("DQIX_MODE")) g_classic = strcmp(getenv("DQIX_MODE"), "enhanced") != 0;   /* tests */
     /* real pixels on high-DPI Windows setups (not stretched by the system), so
@@ -948,12 +1043,32 @@ static int to_touch_in(SDL_Window* win, int wx, int wy, int* tx, int* ty, int cl
         canvas_layout_for(&v, ww, wh, win == g_win2);
         lx = ((float)wx + 0.5f - v.ox) / v.sc; ly = ((float)wy + 0.5f - v.oy) / v.sc;
     } else { canvas_layout(&v, 1, 1); SDL_RenderWindowToLogical(g_ren, wx, wy, &lx, &ly); }
+    if (v.npiece) {                                               /* the battle HUD's panels: back to where they are on the touch screen */
+        static int last;                                          /* the panel last touched: a drag off it stays on its edge */
+        int hit = -1;
+        for (int i = v.npiece - 1; i >= 0 && hit < 0; i--) {
+            const float* q = v.piece[i];
+            if (lx >= q[0] && lx < q[0] + q[2] && ly >= q[1] && ly < q[1] + q[3]) hit = i;
+        }
+        if (hit < 0 && !(clamp && last < v.npiece)) return 0;   /* the rest of the commands screen isn't shown */
+        if (hit >= 0) last = hit;
+        const float* q = v.piece[last];
+        float px = fminf(fmaxf(lx, q[0]), q[0] + q[2] - 0.01f), py = fminf(fmaxf(ly, q[1]), q[1] + q[3] - 0.01f);
+        int x = (int)floorf(q[5] + (px - q[0]) * q[7] / q[2]), y = (int)floorf(q[6] + (py - q[1]) * q[8] / q[3]);
+        if (x < 0 || x > 255 || y < 0 || y > 191) return 0;
+        *tx = x; *ty = y;
+        return 1;
+    }
     if (v.front == 0 && v.top[2] < 256 && lx >= v.top[0] && lx < v.top[0] + v.top[2] && ly >= v.top[1] && ly < v.top[1] + v.top[3])
         return 0;                                                 /* on the small top screen in front of it */
     int side = 0; if (g_gl) gl_wide_shown(&side);
     if (g_gl && v.bot[2] <= 0) return 0;                         /* not shown */
     float bw = v.bot[2] > 0 ? v.bot[2] : 256, bh = v.bot[3] > 0 ? v.bot[3] : 192, bx = v.botx[1] > 0 ? v.botx[1] : 256;
     int x = (int)floorf((lx - v.bot[0]) * bx / bw + (g_gl ? v.botx[0] - (float)side : 0)), y = (int)floorf((ly - v.bot[1]) * 192.0f / bh);
+    if (g_gl && gl_wide_shown(&side) == 1 && y >= 0 && y < 192) {   /* dynamic widescreen: a window moved right is touched where it really is */
+        extern int gpu3d_ui_unshift(int*, int);
+        if (!gpu3d_ui_unshift(&x, y)) gl_ui_unshift(&x, y);
+    }
     if (clamp) { x = x < 0 ? 0 : x > 255 ? 255 : x; y = y < 0 ? 0 : y > 191 ? 191 : y; }
     if (x < 0 || x > 255 || y < 0 || y > 191) return 0;
     *tx = x; *ty = y;
@@ -1141,7 +1256,7 @@ static void report_window_shot(int w, int h) {
  * is on screen, nothing personal (no names, addresses or Wi-Fi ID). */
 static void settings_save(void);
 static void report_display(const char* dir) {
-    static const char* KEEP[] = { "mode", "render_scale", "smooth_textures", "outlines", "widescreen_popout", "window_scale", "layout",
+    static const char* KEEP[] = { "mode", "render_scale", "smooth_textures", "outlines", "soft_shadows", "smooth_shading", "hd_text", "widescreen_popout", "window_scale", "layout",
         "single_screen", "small_screen_corner", "small_screen_size", "small_screen_hidden", "small_screen_opacity", "swap_screens",
         "second_window", "second_window_fullscreen", "walk_any_direction", "fullscreen", "dslite_filter", "lcd_colors", "pixel_grid",
         "motion_blur", "backlight", "screen_gap", "console", "integer_scaling", "actual_size" };
@@ -1218,6 +1333,66 @@ static void wide_update(int a_on_top) {
     else if (g_wide_mix > target) g_wide_mix = fmaxf(target, g_wide_mix - step);
 }
 
+/* Widescreen battles (3D on the top screen): find the party's panels on the
+ * commands screen. They are stacked across it, each framed in white with a
+ * grey line (0x515151) between them; the one whose turn it is is taller and
+ * holds the commands. Anything else there (no such lines) keeps the usual
+ * small screen. In the field, keep the map for the map window. */
+static void hud_update(int a_on_top) {
+    g_hud_n = 0; g_hud_win[2] = 0;
+    if (!g_gl || !(g_hud || g_wide_dyn) || !g_wide || g_side_by_side || (g_two && !g_single)) return;   /* (dynamic widescreen: always) */
+    int side = 0, which = gl_wide_shown(&side);
+    if (which == 1 && g_wide_pop) {                               /* the field: the map the window keeps during battles */
+        uint16_t mb; memcpy(&mb, &g_io[(a_on_top ? 0 : 0x1000) + 0x6C], 2);   /* the top screen's engine (the map) */
+        static unsigned n;                                        /* a copy of the whole picture: a few times a second is enough */
+        if (n++ % 10 == 0 && !g_small_blank && (!(mb >> 14) || !(mb & 0x1F))) gl_hold();   /* not while it fades out (into a battle) */
+        return;
+    }
+    if (which != 0) return;
+    const uint32_t* px = g_engine_out[a_on_top ? 1 : 0];          /* the bottom screen's engine */
+    uint32_t c_sep = 0x515151, c_frame = 0xFBFBFB;                /* dynamic widescreen: also while they fade in from black */
+    if (g_wide_dyn) {                                             /* (master brightness: those colours dimmed the same way) */
+        uint16_t mb; memcpy(&mb, &g_io[(a_on_top ? 0x1000 : 0) + 0x6C], 2);
+        uint32_t f = mb & 31; if (f > 16) f = 16;
+        if ((mb >> 14) == 2 && f) {
+            uint32_t v6[2] = { 0x51 >> 2, 0xFB >> 2 }, out[2];
+            for (int k = 0; k < 2; k++) { uint32_t c = v6[k] - ((v6[k] * f + 15) >> 4); c = c << 2 | c >> 4; out[k] = c * 0x010101u; }
+            c_sep = out[0]; c_frame = out[1];
+        }
+    }
+    int sep[192], nsep = 0;
+    for (int y = 0; y < 192; y++) {
+        int n = 0;
+        for (int x = 10; x < 246; x++) if ((px[y * 256 + x] & 0xFFFFFF) == c_sep) n++;
+        sep[y] = n > 200; nsep += sep[y];
+    }
+    if (nsep < 1) {                                               /* no panels: one window alone (experience, level up)? */
+        if (!g_last_battle || g_frame - g_last_battle > 60 * 30) return;   /* only just after a battle (not the field's own windows) */
+        int x0 = 256, y0 = 192, x1 = -1, y1 = -1, n = 0;              /* its inside: dark grey 0x303030, in both styles */
+        for (int y = 0; y < 192; y++)
+            for (int x = 0; x < 256; x++)
+                if ((px[y * 256 + x] & 0xFFFFFF) == 0x303030) { n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 - x0 < 100 || y1 - y0 < 40 || n * 10 < (x1 - x0 + 1) * (y1 - y0 + 1) * 7) return;   /* (mostly that grey: one window) */
+        x0 = x0 < 3 ? 0 : x0 - 3; y0 = y0 < 3 ? 0 : y0 - 3; x1 = x1 > 252 ? 255 : x1 + 3; y1 = y1 > 188 ? 191 : y1 + 3;   /* its frame */
+        g_hud_win[0] = x0; g_hud_win[1] = y0; g_hud_win[2] = x1 - x0 + 1; g_hud_win[3] = y1 - y0 + 1;
+        return;
+    }
+    int n = 0, tall = 0;
+    for (int y = 0; y < 192;) {
+        if (sep[y]) { y++; continue; }
+        int y0 = y;
+        while (y < 192 && !sep[y]) y++;
+        if (y - y0 < 8) continue;                                 /* a border, not a panel */
+        /* a member's panel: 30-45 rows (the one whose turn it is: up to 80), framed in white */
+        int h = y - y0, mid = (y0 + y) / 2, framed = 0;
+        for (int x = 0; x < 16; x++) if ((px[mid * 256 + x] & 0xFFFFFF) == c_frame) framed = 1;
+        if (!framed) continue;                                    /* the wood around the panels (above them in the attacks, below a party of 3) */
+        if (n == 8 || h < 30 || h > 80 || (h >= 50 && tall++)) return;
+        g_hud_band[n][0] = y0; g_hud_band[n][1] = y; n++;
+    }
+    if (n >= 2) { g_hud_n = n; g_last_battle = g_frame; }
+}
+
 /* 3D resolution Auto: render at 1.5 times the size the 3D is shown at (at
  * least 2x, at most what the GPU holds), so it is never stretched and the
  * extra detail smooths the edges. Changes after the size has stayed the same
@@ -1272,8 +1447,39 @@ static void present_gl(void) {
     auto_scale();
     present_gl_state();
     uint16_t pow; memcpy(&pow, &g_io[0x304], 2);
+    {   /* dynamic widescreen: the game's windows move right (the field doesn't); in battles only the messages (gpu3d.c) */
+        int side = 0; gl_wide_shown(&side);
+        int on = g_gl && g_wide && g_wide_dyn && !g_wide_pop && !g_side_by_side && !(g_two && !g_single);
+        extern int g_ui_shift3d, g_ui_battle3d, g_ui_hold, g_ui_area3d, g_ui_battle_left;
+        g_ui_shift3d = on ? side : 0; g_ui_battle3d = g_hud_n > 0;                                            /* (gpu3d.c) */
+        g_ui_battle_left = g_hud_right > 0 ? g_hud_right - side + 4 : 0;   /* the battle messages start right of the panels */
+        gl_set_ui_shift(on ? side : 0, g_hud_n > 0);                                                          /* (2D ones) */
+        /* a menu screen of its own (Stella's, Equipment: its own background over the whole picture):
+         * the DS's picture as it is, 4:3 at the right, nothing moved; back once it's the field again.
+         * Windows over the field (the menu, its lists) keep moving right instead. */
+        static int over, under;
+        extern int g_ui_scene, g_ui_windows3d;
+        extern int g_ui_bg2d;
+        int menu_screen = on && !g_ui_battle3d && (g_ui_area3d >= 1000 ||                     /* a 3D picture over the whole screen (Stella's) */
+                          (g_ui_scene < 24 * 32 * 4 / 10 && g_ui_bg2d >= 160));             /* hardly any scene, and a 2D picture of its own
+                                                                                               * around it (the quest list), not black */
+        if (menu_screen) { over++; under = 0; } else { under++; over = 0; }
+        if (!on) g_ui_plain = 0;
+        else if (!g_ui_plain && over >= 2) g_ui_plain = 1;
+        else if (g_ui_plain && (under >= 6 || (under >= 1 && g_ui_scene >= 24 * 32 * 3 / 4))) g_ui_plain = 0;   /* (the field back: at once) */
+        g_ui_hold = g_ui_plain; gl_set_ui_hold(g_ui_plain);
+        {   static int lg = -1; if (lg < 0) lg = getenv("DQIX_UILOG") != NULL;     /* tests: what the menu-screen test sees */
+            extern int g_ui_npoly;
+            if (lg && on) fprintf(stderr, "ui f%llu scene %d win3d %d area3d %d area2d %d battle %d plain %d n %d bg2d %d\n", (unsigned long long)g_frame,
+                                  g_ui_scene, g_ui_windows3d, g_ui_area3d, gl_ui_area(), g_ui_battle3d, g_ui_plain, g_ui_npoly, g_ui_bg2d); }
+    }
+    {   static int lg = -1; static uint64_t last = ~0ull;                   /* tests: the overlays loaded, as they change */
+        if (lg < 0) lg = getenv("DQIX_OVLLOG") != NULL;
+        if (lg) { extern uint64_t overlays_loaded_mask(void); uint64_t m = overlays_loaded_mask();
+            if (m != last) { last = m; fprintf(stderr, "ovl f%llu:", (unsigned long long)g_frame); for (int i = 0; i < 64; i++) if (m >> i & 1) fprintf(stderr, " %d", i); fprintf(stderr, "\n"); } } }
     gl_compose((pow >> 15) & 1, pow & 1);
     wide_update((pow >> 15) & 1);
+    hud_update((pow >> 15) & 1);
     gl_dump_hook();
     test_hooks();
     {   /* widescreen: the small screen see-through (O), but solid while the mouse is on it */
@@ -1399,7 +1605,14 @@ static void menu_sync(void) {
     }
     menu_check(MI_POPOUT, g_wide_pop && wide); menu_enable(MI_POPOUT, g_gl);
     menu_enable(MI_SCENE_BARS, wide);
+    menu_check(MI_HUD, g_hud && wide); menu_enable(MI_HUD, g_gl);
     menu_check(MI_SMOOTH, g_smooth); menu_enable(MI_SMOOTH, g_gl && !g_classic);
+    menu_check(MI_HD_TEXT, g_hd_text != 0); menu_enable(MI_HD_TEXT, g_gl != 0);
+    menu_check(MI_TEXPACK, g_tex_pack); menu_check(MI_TEXUP, g_tex_up); menu_check(MI_TEXDUMP, g_tex_dump);
+    for (int i = MI_TEXPACK; i <= MI_TEXFOLDER; i++) menu_enable(i, g_gl != 0);
+    menu_check(MI_MUSPACK, g_mus_pack); menu_check(MI_MUSNAMES, g_mus_names);
+    menu_check(MI_SOFT_SHADOWS, g_gl_soft_alpha != 0); menu_enable(MI_SOFT_SHADOWS, g_gl && !g_classic);
+    menu_check(MI_SMOOTH_SHADE, g_gl_soft_shade != 0); menu_enable(MI_SMOOTH_SHADE, g_gl && !g_classic);
     for (int i = 0; i < 3; i++) { menu_check(MI_OUTLINE0 + i, g_gl_outline == (i == 0 ? 1 : i == 1 ? 2 : 0)); menu_enable(MI_OUTLINE0 + i, g_gl && !g_classic); }
     menu_check(MI_LCD, g_opt.lcd); menu_enable(MI_LCD, g_gl);
     int lcd = g_gl && g_opt.lcd;
@@ -1423,16 +1636,12 @@ static void menu_sync(void) {
     menu_check(MI_SWAP, g_swap && !wide); menu_enable(MI_SWAP, !wide);
     for (int i = 0; i < 4; i++) { menu_check(MI_OPACITY1 + i, g_small_opacity == 100 - 25 * i); menu_enable(MI_OPACITY1 + i, g_gl); }
     menu_check(MI_ANALOG, g_analog_walk);
+    for (int i = 0; i < 5; i++) { menu_check(MI_LANG1 + i, g_fw_language == i + 1); menu_enable(MI_LANG1 + i, rom_is_eur()); }
     for (int i = 0; i < 4; i++) { menu_check(MI_SIZE1 + i, g_scale == i + 1); menu_enable(MI_SIZE1 + i, !g_opt.actual); }
     menu_check(MI_INTEGER, g_opt.integer); menu_enable(MI_INTEGER, !g_opt.actual);
     menu_check(MI_ACTUAL, g_opt.actual); menu_enable(MI_ACTUAL, g_gl);
     menu_check(MI_FULL, g_fullscreen);
-    for (int i = 0; i < i18n_count(); i++) menu_check(MI_LANG0 + i, i18n_current() == i);
-    menu_check(MI_GAMELANG0, !strcmp(g_gamelang_setting, "auto"));
-    for (int i = 0; i < GAMELANG_COUNT; i++) {
-        menu_check(MI_GAMELANG0 + 1 + i, !strcmp(g_gamelang_setting, GAMELANG_CODE[i]));
-        menu_enable(MI_GAMELANG0 + 1 + i, rom_has_game_language(i));
-    }
+    for (int i = 0; i < i18n_count(); i++) menu_check(MI_UILANG0 + i, i18n_current() == i);
 }
 
 static const char* CONTROLS_TEXT =
@@ -1597,6 +1806,51 @@ static void url_add(char* out, size_t n, const char* s) {
     out[k] = 0;
 }
 
+/* Mods > Export the game's songs: on a thread of its own (it reads only the ROM), the progress in the title */
+static volatile int g_exp_done, g_exp_total, g_exp_running, g_exp_finished;
+static void exp_progress(int d, int t) { g_exp_done = d; g_exp_total = t; }
+static int exp_thread(void* u) {
+    (void)u;
+    int n = music_export("music/export", exp_progress);
+    g_exp_done = n; g_exp_finished = 1; g_exp_running = 0;
+    return 0;
+}
+static void open_folder(const char* path);
+static void music_export_start(void) {
+    if (g_exp_running) { notice(N_("Already exporting the songs (%d of %d)"), g_exp_done, g_exp_total); return; }
+#ifdef _WIN32
+    _mkdir("music"); _mkdir("music/export");
+#else
+    mkdir("music", 0777); mkdir("music/export", 0777);
+#endif
+    g_exp_running = 1; g_exp_finished = 0; g_exp_done = 0; g_exp_total = 0;
+    SDL_Thread* t = SDL_CreateThread(exp_thread, "music export", NULL);
+    if (t) { SDL_DetachThread(t); notice(N_("Exporting the game's songs to music\\export...")); }
+    else g_exp_running = 0;
+}
+static void music_export_poll(void) {
+    static uint64_t last;
+    if (g_exp_running && g_exp_total && SDL_GetPerformanceCounter() - last > g_perf_freq / 2) {
+        last = SDL_GetPerformanceCounter(); notice(N_("Exporting the game's songs: %d of %d"), g_exp_done, g_exp_total);
+    }
+    if (g_exp_finished) {
+        g_exp_finished = 0;
+        notice(g_exp_done ? N_("Exported %d songs to music\\export (loops.txt has their loop points)") : N_("Couldn't export the songs (%d)"), g_exp_done);
+        if (g_exp_done) open_folder("music/export");
+    }
+}
+
+static void open_folder(const char* path) {
+#ifdef _WIN32
+    char full[MAX_PATH]; if (!GetFullPathNameA(path, sizeof full, full, NULL)) return;
+    char cmd[MAX_PATH + 40]; snprintf(cmd, sizeof cmd, "explorer.exe \"%s\"", full);
+    STARTUPINFOA si; memset(&si, 0, sizeof si); si.cb = sizeof si;
+    PROCESS_INFORMATION pi;
+    if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) { CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
+#else
+    char url[700]; snprintf(url, sizeof url, "file://%s", path); SDL_OpenURL(url);
+#endif
+}
 static void show_in_folder(const char* path) {
 #ifdef _WIN32
     char full[MAX_PATH]; if (!GetFullPathNameA(path, sizeof full, full, NULL)) return;
@@ -1618,8 +1872,7 @@ static void report_send(const char* dir, const char* description) {
     static const char* WARN =
         N_("Send this report to the people working on the game?\n\n"
         "Your browser opens a new bug report on the project's GitHub page, already filled in, and the report's file is copied "
-        "for you: in the page you only press Ctrl+V, then Create. You need a free GitHub account (no account: paste it "
-        "on the Discord instead).\n\n"
+        "for you: in the page you only press Ctrl+V, then Create. You need a free GitHub account.\n\n"
         "Everything on GitHub is public: anyone can see the report and download its file. The file contains:\n"
         "  - a screenshot of the game, and of the window with your display settings\n"
         "  - every button you pressed since the game started\n"
@@ -1683,13 +1936,11 @@ static void report_send(const char* dir, const char* description) {
         "  1.  Click in the big text box and press  Ctrl+V\n"
         "        (this attaches your report: a link to the file appears)\n\n"
         "  2.  Press  Create  (the green button)\n\n"
-        "No GitHub account? Press Ctrl+V in a message on the Discord instead.\n\n"
         "Ctrl+V did nothing? Press Copy again, or Show the file and drag it into the box.";
     static const char STEPS_DRAG[] =
         "Almost done - 2 steps:\n\n"
         "  1.  Drag the report file from the folder that opened into the big text box on the page\n\n"
-        "  2.  Press  Create  (the green button)\n\n"
-        "No GitHub account? Drop the file in a message on the Discord instead.";
+        "  2.  Press  Create  (the green button)";
     const char* sb[3] = { "Done", copied ? "Copy again" : "Show the file", "Show the file" };
     for (;;) {
         int r = choose(N_("Send the bug report"), copied ? STEPS : STEPS_DRAG, sb, copied ? 3 : 2, 0, 0);
@@ -1999,18 +2250,12 @@ static void idle_pump(void) {
 
 static void ui_language(int i) {
     if (i < 0 || i >= i18n_count()) return;
-    snprintf(g_lang_setting, sizeof g_lang_setting, "%s", i18n_code(i));
+    snprintf(g_ui_lang_setting, sizeof g_ui_lang_setting, "%s", i18n_code(i));
     i18n_set(i);
     menu_rebuild();
     menu_sync();
     if (g_win) update_title(g_last_fps);
     second_window_sync();
-}
-static void game_language(int k) {                                      /* 0 automatic, 1..GAMELANG_COUNT */
-    snprintf(g_gamelang_setting, sizeof g_gamelang_setting, "%s", k ? GAMELANG_CODE[k - 1] : "auto");
-    settings_save();
-    if (session_requested()) { info_box(SDL_MESSAGEBOX_INFORMATION, N_("Game text"), N_("The game's language changes when it starts again. Leave the session first (Wireless menu), then start the game again."), g_win); return; }
-    if (ask_yes(N_("Game text"), N_("The game's own text changes when it starts again.\n\nStart the game again now? Anything since you last saved in the game is lost."), N_("Restart"))) restart_with(NULL);
 }
 
 static void do_action(int id) {
@@ -2102,6 +2347,74 @@ static void do_action(int id) {
     case MI_RES_AUTO: if (g_gl && !g_classic) g_res_auto = 1; break;          /* auto_scale() picks it */
     case MI_SMOOTH: if (g_gl) { g_smooth = !g_smooth; gl_set_smooth(g_smooth); } break;
     case MI_SCENE_BARS: scene_toggle_bars(); break;
+    case MI_TEXPACK:
+        g_tex_pack = !g_tex_pack; gl_set_texture_pack(g_tex_pack);
+        if (g_tex_pack) { int n = gl_reload_texture_pack(); notice(n ? N_("Texture packs: %d pictures") : N_("Texture packs on (the textures folder has none yet)"), n); }
+        else notice(N_("Texture packs off: the game's own textures"));
+        break;
+    case MI_TEXUP: g_tex_up = !g_tex_up; gl_set_tex_upscale(g_tex_up); notice(N_("Upscaled 3D textures: %s"), g_tex_up ? tr("on (hold ` to compare)") : tr("off")); break;
+    case MI_TEXDUMP: g_tex_dump = !g_tex_dump; gl_set_texture_dump(g_tex_dump); notice(g_tex_dump ? N_("Dumping textures to textures\\dump") : N_("Dumping off")); break;
+    case MI_TEXRELOAD: { int n = gl_reload_texture_pack(); notice(N_("Texture packs: %d pictures"), n); break; }
+    case MI_TEXFOLDER: {
+#ifdef _WIN32
+        _mkdir("textures");
+#else
+        mkdir("textures", 0777);
+#endif
+        open_folder("textures");
+        break;
+    }
+    case MI_MUSPACK: {
+        g_mus_pack = !g_mus_pack;
+        int n = music_enable(g_mus_pack && !session_running());
+        if (!g_mus_pack) notice(N_("Music packs off: the game's own music (from the next song)"));
+        else notice(n ? N_("Music packs: %d songs replaced (from the next time each starts)") : N_("Music packs on (the music folder has no songs yet)"), n);
+        break;
+    }
+    case MI_MUSRELOAD: { int n = music_reload(); notice(N_("Music packs: %d songs replaced (from the next time each starts)"), n); break; }
+    case MI_MUSNAMES: g_mus_names = !g_mus_names; notice(g_mus_names ? N_("Each song's name shows as it starts") : N_("Song names off")); break;
+    case MI_MUSFOLDER: {
+#ifdef _WIN32
+        _mkdir("music");
+#else
+        mkdir("music", 0777);
+#endif
+        music_write_list("music/songs.txt");
+        open_folder("music");
+        break;
+    }
+    case MI_MUSEXPORT: music_export_start(); break;
+    case MI_MODS_HELP:
+        info_box(SDL_MESSAGEBOX_INFORMATION, N_("Mods"),
+            N_("Texture packs: PNG pictures in the textures folder (next to the game) are drawn instead of the game's own textures, "
+            "in Enhanced mode. Each is named after the texture it replaces.\n\n"
+            "To make one: turn on Dump textures and play. Every texture shown is saved in textures\\dump. Redraw or upscale those "
+            "PNGs (keep their names and see-through parts) and put them anywhere in the textures folder outside dump, "
+            "then Reload the texture packs.\n\n"
+            "Upscale the 3D textures: the game's textures enlarged 4x with xBR, so slopes and curves stay smooth (a pack's pictures come first).\n\n"
+            "Hold ` (the key left of 1) to see the game's own textures, to compare.\n\n"
+            "Music packs: OGG or FLAC recordings in the music folder play instead of the game's songs. Each is named after the "
+            "song it replaces (BG_012.ogg); Open the music folder lists them all in songs.txt, and Show each song's name tells you "
+            "which one is playing. Songs loop between the LOOPSTART and LOOPLENGTH tags (in samples) if the file has them, "
+            "else the whole file; jingles (ME_) play once. The game's fades and pauses carry over. "
+            "Export the game's songs writes each as a WAV file (with its loop) to music\\export, to hear which is which; "
+            "a WAV with a loop works in the music folder too. "
+            "music_pack_volume in settings.ini sets how loud they are. While playing together (Wireless) the game's own music plays."), g_win);
+        break;
+    case MI_HD_TEXT:
+        if (g_gl) {
+            g_hd_text = !g_hd_text; gl_set_hd_text(g_hd_text);
+            notice(g_classic ? N_("HD text %s (shows in Enhanced, F5)") : N_("HD text %s"), g_hd_text ? tr("on") : tr("off"));
+        }
+        break;
+    case MI_SOFT_SHADOWS:
+        g_gl_soft_alpha = !g_gl_soft_alpha;
+        notice(N_("Soft shadows: %s%s"), g_gl_soft_alpha ? tr("on") : tr("off (the DS's steps)"), g_scale3d < 2 && !g_res_auto ? tr(" - shows at 2x and above") : "");
+        break;
+    case MI_SMOOTH_SHADE:
+        g_gl_soft_shade = !g_gl_soft_shade;
+        notice(N_("Smooth shading: %s%s"), g_gl_soft_shade ? tr("on") : tr("off (the DS's steps)"), g_scale3d < 2 && !g_res_auto ? tr(" - shows at 2x and above") : "");
+        break;
     case MI_SAVE_EXPORT: save_export(); break;
     case MI_SAVE_IMPORT: save_import(); break;
     case MI_OUTLINE0: case MI_OUTLINE0 + 1: case MI_OUTLINE0 + 2:
@@ -2114,6 +2427,7 @@ static void do_action(int id) {
         else { g_wide_pop = 1; g_wide = 1; g_corner = g_side_by_side = g_two = 0; }   /* turns widescreen on too */
         relayout = 1;
         break;
+    case MI_HUD: g_hud = !g_hud; break;
     case MI_FULL2: second_window_fullscreen(); break;
     case MI_LCD: if (g_gl) g_opt.lcd = !g_opt.lcd; g_fps_t0 = 0; break;
     case MI_LCDCOL: g_opt.lcd_color = !g_opt.lcd_color; break;
@@ -2165,20 +2479,31 @@ static void do_action(int id) {
 #endif
         break;
     case MI_ANALOG: g_analog_walk = !g_analog_walk; break;
+    case MI_LANG1: case MI_LANG1 + 1: case MI_LANG1 + 2: case MI_LANG1 + 3: case MI_LANG1 + 4: {
+        int lang = id - MI_LANG1 + 1;
+        if (lang == g_fw_language) break;
+        g_fw_language = lang;
+        char text[300];
+        snprintf(text, sizeof text, tr("The game will be in %s the next time it starts: close it and start it again.\n\n"
+                 "Your adventure log is the same in every language."), LANGUAGE_NAME[lang]);
+        info_box(SDL_MESSAGEBOX_INFORMATION, N_("Language"), text, g_win);
+        break;
+    }
     case MI_MODERN_HELP:
         info_box(SDL_MESSAGEBOX_INFORMATION, N_("Modern"),
             N_("Optional ways to play that the DS didn't have. Walking with the stick is on at first; the others are off. With them all off the game is exactly the original.\n\n"
             "Walk in any direction with the left stick (on at first): on the DS the D-pad walks in 8 directions and only the stylus walks in any. With this on, "
             "a controller's left stick steers like the stylus while you walk around (the game's own stylus walking). In menus, dialogue and "
             "battles the stick stays a D-pad. Friends in a session don't need it on.\n\n"
-            "Widescreen: the action (the field, or a battle) is drawn wider than the DS's screen, so you see more of the world left and right, "
+            "Basic Widescreen: the action (the field, or a battle) is drawn wider than the DS's screen, so you see more of the world left and right, "
             "and the other screen (the map, or the battle commands) sits small in a corner over it. K (or the right stick click) moves it to "
             "the next corner, I changes its size, O (or the left stick click) how see-through it is; it turns solid while the mouse is on it. "
             "U (or the left trigger) hides it; holding F9 (or the right trigger) shows it big until you let go. In a window it is 16:9; in "
             "fullscreen it fills the monitor. Text, menus and the touch screen's buttons stay in the middle, as on the DS. People and things "
             "at the sides stay in view (except while playing with friends far away). Enhanced mode only (the 3D on the graphics card).\n\n"
-            "Widescreen, dynamic (experimental): the small screen stays top left, and the field slides over to make room when a menu "
-            "would be under it.\n\n"
+            "Dynamic Widescreen (Experimental): the field never moves; the map stays top left, and the game's windows over the field move "
+            "right, clear of it (dialogue stays in the middle); screens of their own (Stella's lists, Equipment) show 4:3 at the right; "
+            "in battles the party's panels sit stacked in the bottom left.\n\n"
             "Top screen in the corner: the field as on the DS (4:3), the top screen beside it.\n\n"
             "Two windows: one screen in each, to put them on two monitors (each can be fullscreen).\n\n"
             "Single screen (U or the left trigger): only one screen, as big as it gets; F9 or the right trigger shows the other one.\n\n"
@@ -2219,15 +2544,6 @@ static void do_action(int id) {
         relayout = !g_fullscreen;
         break;
     case MI_CONTROLS: info_box(SDL_MESSAGEBOX_INFORMATION, N_("Controls"), CONTROLS_TEXT, g_win); break;
-    case MI_LANG_HELP:
-        info_box(SDL_MESSAGEBOX_INFORMATION, N_("Language"),
-            N_("Menus and messages: the language of this program. It changes at once and is remembered.\n\n"
-               "Game text: the language of Dragon Quest IX itself. The text comes from your ROM, so it only changes if the ROM has "
-               "that language: the European version has English, French, German, Italian and Spanish (like a DS, it follows "
-               "its language setting); the USA version is English only and the Japanese one Japanese only. The languages your ROM "
-               "doesn't have are greyed out. Automatic follows your system's language. A change takes effect when the game "
-               "starts again."), g_win);
-        break;
     case MI_UPDATE: update_menu(); break;
     case MI_UPDATE_AUTO: g_update_auto = !g_update_auto; settings_save(); break;
     case MI_ABOUT:
@@ -2241,8 +2557,7 @@ static void do_action(int id) {
     default:
         if (id >= MI_SHELLC0 && id < MI_SHELLC0 + N_SHELLS) { g_opt.shell_color = id - MI_SHELLC0; g_color_chosen = 1; relayout = 1; }
         else if (id >= MI_SPEED0 && id < MI_SPEED0 + 3) g_fast_mult = id == MI_SPEED0 ? 2 : id == MI_SPEED0 + 1 ? 4 : 0;
-        else if (id >= MI_LANG0 && id < MI_LANG0 + i18n_count()) ui_language(id - MI_LANG0);
-        else if (id >= MI_GAMELANG0 && id <= MI_GAMELANG0 + GAMELANG_COUNT) game_language(id - MI_GAMELANG0);
+        else if (id >= MI_UILANG0 && id < MI_UILANG0 + i18n_count()) ui_language(id - MI_UILANG0);
         else return;
     }
     if (relayout && g_win) {                                   /* a new window size only when one was asked for */
@@ -2294,6 +2609,7 @@ static void hotkey(int a) {
     case CA_RESET: do_action(MI_RESET); break;
     case CA_SHOT: do_action(MI_SHOT); break;
     case CA_REPORT: do_action(MI_REPORT); break;
+    case CA_HDTEXT: do_action(MI_HD_TEXT); break;
     }
 }
 
@@ -2425,6 +2741,12 @@ void frontend_frame(void) {
     { extern double g_t2d_ms; static double last; pr->d2 = (float)(g_t2d_ms - last); last = g_t2d_ms; }
     pr->audio_ms = (int)(sound_buffered() * 1000 / 32768);
     handle_events();
+    if (!g_headless) {                                          /* music packs: not while playing together (each DS's memory must match) */
+        static int was = -1; int want = g_mus_pack && !session_running();
+        if (want != was) { if (was >= 0 || !want) music_enable(want); was = want; }
+        char nm[64]; if (music_now(nm, sizeof nm) && g_mus_names && g_win) notice(N_("Music: %s"), nm);   /* Mods > Show each song's name */
+        music_export_poll();
+    }
     if (g_win) {
         const Uint8* ks = SDL_GetKeyboardState(NULL);
         g_fe_keys = key_bits(ks) | pad_bits();
@@ -2440,6 +2762,7 @@ void frontend_frame(void) {
             g_pad_resync = 0;
             /* widescreen: the other screen shows while the swap button is held */
             if (g_peek && !controls_key_held(CA_SWAP, ks) && !controls_pad_held(CA_SWAP, g_pad)) g_peek = 0;
+            g_tex_compare = controls_key_held(CA_COMPARE, ks) || controls_pad_held(CA_COMPARE, g_pad);
             if (!wide_now()) g_peek = 0;
             { static int tp = -1; if (tp < 0) tp = getenv("DQIX_TEST_PEEK") != NULL; if (tp && wide_now()) g_peek = 1; }   /* tests */
             /* reset: Start + Select + L + R held for a second on the controller (wherever they are mapped) */

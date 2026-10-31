@@ -56,6 +56,7 @@ void ipc_fifo_send(Core* k, uint32_t v) {
     { static int lg = -1; if (lg < 0) lg = getenv("DQIX_PXILOG") != NULL;
       extern uint32_t threads_cur_ctx9(void);
       if (lg) fprintf(stderr, "pxi f%llu %s tag %2u err %u data %07x thr %08x\n", (unsigned long long)g_frame, k->name, v & 0x1F, (v >> 5) & 1, v >> 6, k->id == 0 ? threads_cur_ctx9() : 0); }
+    if (k->id == 0 && (v & 0x1F) == 7) { extern void music_pxi(uint32_t); music_pxi(v >> 6); }   /* sound commands: music packs (music.c) */
     if (tx->count == 1 && (g_cnt[other(k)->id] & 0x0400)) irq_raise(other(k), IRQ_IPC_RECV_NOT_EMPTY);
 }
 

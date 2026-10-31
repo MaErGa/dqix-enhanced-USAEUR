@@ -393,28 +393,6 @@ Generated C is derived from the game: never share it. The project itself contain
 * 528 `bx r12` long-call stubs go through the dispatcher (later optimisation).
 
 
-## Other versions of the game (config/eur)
-
-The recompiler needs every function's address, size and mode. `config/usa` has them for the USA
-version. The European version is the same program compiled again, with the same modules and
-overlays at the same load addresses but the code a few bytes apart. `tools/derive_config.py`
-finds each USA function in the European code by its instructions (branch offsets and constant
-addresses set aside) and moves every address of `config/usa`, `hle.txt`, `patches.txt`, `tags.txt`
-and `interpret.txt` to match; the result is `config/eur`, which `tools/build-game.sh` uses when the
-ROM's game code is `YDQP`. 14,775 of the 14,780 functions are matched; the recompiler reports no
-problems and produces the same counts as for the USA code. The ARM7 code is identical in both.
-
-In the runtime, the three threading routines replaced natively and the SDK addresses `threads.c`
-needs have a European set (picked from the ROM's game code); `backup_unlock_dlc` only touches the
-USA save layout.
-
-Checked: the European ROM builds, boots, plays the opening and reaches the title screen, in
-English and, with the DS language set to Spanish, in Spanish (headless, scripted input). Not
-checked: playing past the title screen (a new adventure, fields, battles), DQVC and the downloads
-(`wfc/` only has the USA files). If something misbehaves in the European version, report it with
-Game > Save bug report.
-
-
 ## Performance notes
 
 Measured on the European version, headless, with the shipped flags (-O1, -DRECOMP_TRACE), over title, intro,

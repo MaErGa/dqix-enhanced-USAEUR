@@ -1,15 +1,15 @@
 # Where the project stands
 
-Git tag `v31` (and `bookmark-2026-10-19c`) marks the current stable version.
-The ones before: `v30`, `v29`, `v28`, `v27`, `v26`. To go back: `git checkout v30`.
+Git tag `v32` marks the current stable version.
+The ones before: `v31`, `v30`, `v29`, `v28`, `v27`, `v26`. To go back: `git checkout v31`.
 
 ## Stable and nightly
 
-- **Stable** = git branch `stable` (now v31, tag `v31`): the
+- **Stable** = git branch `stable` (now v32, tag `v32`): the
   version to play your main save on. Changes only by promoting a proven
   nightly, or a small safe fix (made on `stable`, then merged into `main`).
   Keep it in its own folder, built with BUILD.bat.
-- **Nightly** = branch `main`, versions `v32-nightly1`, `-nightly2`... (next)
+- **Nightly** = branch `main`, versions `v33-nightly1`, `-nightly2`... (next)
   Experimental. Its own folder and saves.
 - **Promoting**: when a nightly is solid, it becomes the next stable: set the
   version to `v27`, bookmark (tag), move `stable` to it, make the stable zips.
@@ -135,7 +135,7 @@ The ones before: `v30`, `v29`, `v28`, `v27`, `v26`. To go back: `git checkout v3
   Player D was deaf). Fix: waiting consoles drop the frames they could
   never hear (`drain_deaf` in air.c). Then: all four in Player C's world on
   every PC, 206-235 sync checks each, all the same.
-- **nightly9**: going public as github.com/sackchief/dqix-enhanced
+- **nightly9**: going public as a GitHub repository
   (GPL-3.0-or-later: wifi.c and gpu3d.c translate melonDS code). README for
   players (features, getting started, multiplayer, updating); the old
   README is docs/TECHNICAL.md. In-game updates (`runtime/update.c`,
@@ -270,6 +270,18 @@ The ones before: `v30`, `v29`, `v28`, `v27`, `v26`. To go back: `git checkout v3
   30 ms coalescing, keepalive 25 s), relay_url.h. Host window by reach
   (direct / code / home only). connect_within 10 s; home_address warning.
   Tested with a Node stand-in for the Workers runtime.
+- **v32 stable** (2026-10-27): v32-nightly3 and the work after it promoted.
+  European ROM (tools/region.py moves the USA address lists; wrap.txt names
+  its hooks so the runtime's wrap_<name> doesn't depend on the address);
+  Mods (texture/music packs, song export: music.c, music_export.c); HD
+  text; Dynamic Widescreen redone: 3D windows (flat w=16384 polys,
+  gpu3d.c ui_shift_classify) and 2D windows by layer group (gl_render.c
+  ui_classify, u_layer/u_move per pixel), the dialogue box kept centred,
+  menu screens 4:3 (a full-screen picture, or no 3D scene with a 2D
+  background), battle HUD panels; display captures of the 3D drawn on the
+  CPU too (the inn's guests); the Alchemimicon (overlay 6, no 3D) swaps
+  the screens. Tests: DQIX_UILOG, DQIX_UICELLS, DQIX_HUDLOG, DQIX_CAPLOG,
+  DQIX_OVLLOG.
 - **v31 stable** (2026-10-19): v31-nightly1 promoted. Basic widescreen
   (corner/size/opacity) and dynamic (experimental); single screen; triggers
   and stick clicks; reset (relaunch, DQIX_WINPOS); volume; controls.c /

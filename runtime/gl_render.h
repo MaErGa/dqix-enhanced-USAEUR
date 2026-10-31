@@ -11,8 +11,16 @@ int gl_render_max_scale(void);                        /* ...that this GPU can ho
 extern int g_gl_soft_shade;                           /* above 1x: the game's stepped (toon) shading as a smooth ramp */
 extern int g_gl_bars;                                 /* widescreen: black sides (a scene made for the DS's width) */
 extern int g_gl_soft_alpha;                           /* above 1x: textures with alpha levels drawn smooth */
+/* Mods (texture packs: the textures folder; dumping; xBR upscaling): gl_render.c */
+void gl_set_texture_pack(int on);
+void gl_set_tex_upscale(int on);
+void gl_set_texture_dump(int on);
+int gl_reload_texture_pack(void);            /* how many pictures the packs have */
+extern int g_tex_compare;                    /* held: the game's own textures */
 extern int g_gl_outline;                              /* outlines above 1x: 1 thin, 2 medium, 0 the DS's own rule */
 void gl_set_smooth(int on);                           /* smooth textures (filtered) instead of the DS's blocks */
+void gl_set_hd_text(int on);                          /* HD text: the game's letters redrawn at full resolution (text_hd.h) */
+void gl_hd_fonts(const char* dir);                    /* ...from dir/main.ttf, dir/small.ttf and dir/labels.bin */
 const Renderer3D* gl_renderer3d(void);
 void gl_compose(int a_on_top, int lcd_on);           /* at VBlank: 2D + 3D -> both screens */
 /* How to show the screens: canvas (DS pixels) placed in the window at
@@ -32,7 +40,18 @@ typedef struct {
     int skin;                                         /* draw the console photo (gl_set_skin) instead */
     float skin_k;                                     /* photo pixels per canvas unit */
     float badge[4];                                   /* fast forward's sign: x, y (from the top), w, h in window pixels; w 0 = none */
+    int npiece;                                       /* parts of a screen drawn over the canvas (widescreen battle HUD) */
+    float piece[24][10];                              /* ...each: x, y, w, h on the canvas; screen (0 top, 1 bottom); x, y, w, h on it;
+                                                       * see-through: 0 solid, else how solid its fill is (its white lines and letters stay solid) */
+    int held;                                         /* show the picture kept by gl_hold() instead of this frame's */
 } GlPresent;
+#define GL_MAX_PIECES 24
+/* dynamic widescreen: the 3D screen's 2D windows moved right by px DS pixels (0: not); battle: only the battle messages */
+void gl_set_ui_shift(int px, int battle);
+int gl_ui_unshift(int* x, int y);
+void gl_set_ui_hold(int on);                          /* a submenu: move nothing */
+int gl_ui_area(void);                                 /* 8x8 cells under the 2D windows that would move */                     /* a moved window's point back to where it really is (1: it was one) */
+void gl_hold(void);                                   /* keep this frame's picture (the map window during battles) */
 void gl_set_skin(const uint8_t* rgba, int w, int h);
 void gl_present(const GlPresent* v);
 uint8_t* gl_read_window(int w, int h);

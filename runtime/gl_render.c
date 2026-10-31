@@ -21,6 +21,8 @@
 #include "nds.h"
 #include "gpu3d.h"
 #include "gl_render.h"
+#include "text_hd.h"
+#include "text_hd_glyphs.h"
 
 /* ---------------------------------------------------------------- GL functions */
 #define GL_FUNCS(X) \
@@ -243,14 +245,37 @@ static const char* FS_COMP =
     "in vec2 v_uv; out vec4 o_color;\n"
     "uniform sampler2D u_col; uniform sampler2D u_c2; uniform usampler2D u_info; uniform sampler2D u_3d;\n"
     "uniform int u_has3d; uniform vec2 u_outsize;\n"
-    "uniform int u_wide; uniform float u_wtot, u_wside;\n"
-    "uniform int u_bars;\n"                       /* a scene made only for the DS's width: black sides */   /* widescreen: DS pixels across, added each side */
+    "uniform int u_wide; uniform float u_wtot, u_wside;\n"   /* widescreen: DS pixels across, added each side */
+    "uniform int u_bars;\n"                       /* a scene made only for the DS's width: black sides */
+    /* dynamic widescreen: the game's 2D windows moved right by u_shift DS pixels
+     * (u_move: per 8x8 cell, 1 = its 2D moves); the 3D-drawn ones move in gpu3d.c */
+    "uniform int u_shift; uniform usampler2D u_move; uniform usampler2D u_layer; uniform int u_split;\n"
+    /* (u_move: per cell, bit 0 its background layers move, bit 1 its sprites; u_layer: the layer on top) */
+    "bool moves(int x, int y) { if (u_shift <= 0 || x < 0 || x >= 256) return false;\n"
+    "  uint m = texelFetch(u_move, ivec2(x >> 3, y >> 3), 0).r; if (m == 0u) return false;\n"
+    "  if ((texelFetch(u_info, ivec2(x, y), 0).r & 3u) == 1u) return false;\n"
+    "  uint l = texelFetch(u_layer, ivec2(x, y), 0).r;\n"
+    "  if (l == 4u && (m & 4u) != 0u && y < u_split) return true;\n"
+    "  return (m & (l == 4u ? 2u : l < 4u ? 1u : 0u)) != 0u; }\n"
+    /* HD text (text_hd.h): over each pixel up to 4 letters (u_slot: their entries
+     * in u_inst + 1: top left in DS pixels, atlas cell, colour), and the picture
+     * without them (u_notext). The letters come from the atlas (8 pixels per DS
+     * pixel, mipmapped) and go over the 2D picture, before the 3D is blended in. */
+    "uniform int u_hd, u_eng; uniform usampler2D u_slot; uniform sampler2D u_notext; uniform isampler2D u_inst; uniform sampler2D u_atlas;\n"
     "vec3 q5(vec3 c) { return floor(c * 31.0 + 0.5); }\n"
     "void main() {\n"
     "  vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);\n"                  /* row 0 = top line */
     "  float dsx = u_wide != 0 ? uv.x * u_wtot - u_wside : uv.x * 256.0;\n"
+    "  vec2 dsp = vec2(dsx, uv.y * 192.0);\n"
+    "  vec2 gdx = dFdx(dsp) * 8.0, gdy = dFdy(dsp) * 8.0;\n"
     "  ivec2 p2 = ivec2(min(vec2(dsx, uv.y * 192.0), vec2(255.0, 191.0)));\n"
     "  bool side = u_wide != 0 && (dsx < 0.0 || dsx >= 256.0);\n"
+    "  bool gone = false;\n"                      /* this pixel's 2D moved away: the 3D shows here */
+    "  if (u_wide != 0 && u_shift > 0) {\n"
+    "    int ox = int(floor(dsx)), y = p2.y;\n"
+    "    if (moves(ox - u_shift, y)) { p2 = ivec2(ox - u_shift, y); side = false; dsp.x -= float(u_shift); }\n"
+    "    else if (moves(ox, y)) gone = true;\n"
+    "  }\n"
     "  if (side && u_bars != 0) {\n"
     "    int mb0 = int(texelFetch(u_c2, ivec2(dsx < 0.0 ? 0 : 255, p2.y), 0).a * 255.0 + 0.5);\n"
     "    vec3 o0 = vec3(0.0); if ((mb0 >> 5) == 1) o0 = vec3(float(mb0 & 31) / 16.0);\n"
@@ -262,20 +287,59 @@ static const char* FS_COMP =
      * pixel's effects (fades); elsewhere (2D menus, text boxes at the edge) black. */
     "    int found = -1;\n"
     "    for (int k = 0; k < 8; k++) { int x = dsx < 0.0 ? k : 255 - k;\n"
-    "      if ((texelFetch(u_info, ivec2(x, p2.y), 0).r & 3u) != 0u) { found = x; break; } }\n"
+    "      if ((texelFetch(u_info, ivec2(x, p2.y), 0).r & 3u) != 0u || moves(x, p2.y)) { found = x; break; } }\n"
     "    if (found < 0) {\n"
     "      int mb0 = int(texelFetch(u_c2, ivec2(dsx < 0.0 ? 0 : 255, p2.y), 0).a * 255.0 + 0.5);\n"
     "      vec3 o0 = vec3(0.0); if ((mb0 >> 5) == 1) o0 = vec3(float(mb0 & 31) / 16.0);\n"
     "      o_color = vec4(o0, 1.0); return;\n"
     "    }\n"
     "    p2.x = found;\n"
+    "    if (moves(found, p2.y)) gone = true;\n"
+    /* a 2D layer blended over the whole picture (the sepia of memories, GitHub #18):
+     * continue it into the sides as its mirror image, not its edge column in streaks */
+    "    int mx = clamp(dsx < 0.0 ? int(-dsx) : 511 - int(dsx), 0, 255);\n"
+    "    uint mi = texelFetch(u_info, ivec2(mx, p2.y), 0).r & 3u;\n"
+    "    if (mi >= 2u && (texelFetch(u_info, ivec2(found, p2.y), 0).r & 3u) >= 2u) p2.x = mx;\n"
+    "  }\n"
+    "  if (gone) {\n"                                /* the 3D alone (with the screen's fade) */
+    "    ivec2 sz0 = textureSize(u_3d, 0);\n"
+    "    vec4 s0 = texelFetch(u_3d, min(ivec2(v_uv * vec2(sz0)), sz0 - 1), 0);\n"
+    "    int mbg = int(texelFetch(u_c2, p2, 0).a * 255.0 + 0.5); vec3 og = s0.a > 0.0 ? s0.rgb : vec3(0.0);\n"
+    "    float fg = float(mbg & 31) / 16.0; if ((mbg >> 5) == 1) og = og + (1.0 - og) * fg; else if ((mbg >> 5) == 2) og = og - og * fg;\n"
+    "    o_color = vec4(og, 1.0); return;\n"
     "  }\n"
     "  vec3 col = texelFetch(u_col, p2, 0).rgb;\n"
+    /* bare: under the letters there is no 2D, only the 3D (a message box
+     * blended over the field): the letters are blended over the 3D on their
+     * own, and where they don't cover the pixel the 3D shows as it is */
+    "  bool bare = false; float hdA = 0.0; vec3 hdL = vec3(0.0), nt = vec3(0.0);\n"
+    "  if (u_hd != 0 && !side) {\n"
+    "    uvec4 sl = texelFetch(u_slot, p2, 0);\n"
+    "    if (sl.x != 0u) {\n"
+    "      vec4 ntt = texelFetch(u_notext, p2, 0); nt = ntt.rgb; bare = ntt.a > 0.002 && ntt.a < 0.01;\n"
+    "      col = nt;\n"
+    "      vec2 asz = vec2(textureSize(u_atlas, 0));\n"
+    "      vec3 P = vec3(0.0); float A = 0.0;\n"
+    "      for (int k = 0; k < 4; k++) {\n"
+    "        uint s = sl[k];\n"
+    "        if (s == 0u) break;\n"
+    "        ivec4 g = texelFetch(u_inst, ivec2(int(s) - 1, u_eng), 0);\n"
+    "        vec2 org = vec2(float(g.z & 0xFFFF), float(g.z >> 16));\n"
+    "        vec2 a = org + (dsp - vec2(g.xy) + 1.0) * 8.0;\n"
+    "        float al = textureGrad(u_atlas, a / asz, gdx / asz, gdy / asz).r;\n"
+    "        vec3 ink = vec3(float((g.w >> 16) & 255), float((g.w >> 8) & 255), float(g.w & 255)) / 255.0;\n"
+    "        P = P * (1.0 - al) + ink * al; A = A * (1.0 - al) + al;\n"
+    "      }\n"
+    "      col = col * (1.0 - A) + P;\n"
+    "      hdA = A; if (A > 0.0) hdL = P / A;\n"
+    "    }\n"
+    "  }\n"
     "  if (u_has3d == 0) { o_color = vec4(col, 1.0); return; }\n"
     "  uvec4 info = texelFetch(u_info, p2, 0);\n"
     "  int mode = int(info.r & 3u);\n"
 
-    "  if (mode == 0) { o_color = vec4(col, 1.0); return; }\n"
+    "  if (mode == 0 && !bare) { o_color = vec4(col, 1.0); return; }\n"
+    "  if (bare) col = hdL;\n"
     /* the 2D picture behind the 3D (a menu's background, the title screen's
      * picture): beyond the edge it continues as its own mirror image, not as
      * its edge column stretched into stripes */
@@ -286,6 +350,11 @@ static const char* FS_COMP =
     "  ivec2 sz = textureSize(u_3d, 0);\n"
     "  vec4 s = texelFetch(u_3d, min(ivec2(v_uv * vec2(sz)), sz - 1), 0);\n"
     "  float A = s.a; vec3 c3 = s.rgb;\n"
+    "  if (mode == 0) {\n"                                    /* bare letters over the 3D, not blended: with the master brightness */
+    "    vec3 o0 = mix(A > 0.0 ? c3 : nt, hdL, hdA); int m0 = mb >> 5; float f0 = float(mb & 31) / 16.0;\n"
+    "    if (m0 == 1) o0 = o0 + (1.0 - o0) * f0; else if (m0 == 2) o0 = o0 - o0 * f0;\n"
+    "    o_color = vec4(o0, 1.0); return;\n"
+    "  }\n"
     "  float eva = float(info.g) / 16.0, evb = float(info.b) / 16.0, evy = float(info.a) / 16.0;\n"
     "  vec3 o;\n"
     "  if (mode == 1) {\n"
@@ -302,6 +371,7 @@ static const char* FS_COMP =
     "    vec3 under = A > 0.0 ? c3 : c2;\n"
     "    o = min(col * eva + under * evb, vec3(1.0));\n"
     "  }\n"
+    "  if (bare) o = mix(A > 0.0 ? c3 : nt, o, hdA);\n"
     "  int mbm = mb >> 5; float mbf = float(mb & 31) / 16.0;\n"
     "  if (mbm == 1) o = o + (1.0 - o) * mbf; else if (mbm == 2) o = o - o * mbf;\n"
     "  o_color = vec4(o, 1.0);\n"
@@ -317,6 +387,15 @@ static const char* FS_FF =
     "  float a = clamp(e * 14.0, 0.0, 1.0), rim = clamp((e + 0.14) * 14.0, 0.0, 1.0);\n"
     "  o_color = vec4(vec3(a), max(a, rim * 0.7) * 0.9);\n"
     "}\n";
+
+/* A piece of a screen over the canvas: see-through (u_see: how solid) but for
+ * its white frame lines and letters, which stay solid */
+static const char* FS_PIECE =
+    "#version 330 core\n"
+    "in vec2 v_uv; out vec4 o_color; uniform sampler2D u_src; uniform float u_see;\n"
+    "void main() { vec3 c = texture(u_src, v_uv).rgb;\n"
+    "  float a = 1.0; if (u_see > 0.0) a = mix(u_see, 1.0, smoothstep(0.80, 0.92, min(c.r, min(c.g, c.b))));\n"
+    "  o_color = vec4(c, a); }\n";
 
 static const char* FS_COPY =
     "#version 330 core\n"
@@ -581,11 +660,12 @@ static GLuint program(const char* vs, const char* fs, int poly) {
 
 /* ---------------------------------------------------------------- state */
 static int g_scale = 2;
-static GLuint prog_poly, prog_post, prog_comp, prog_copy, prog_screen, prog_ghost, prog_ff;
+static GLuint tex_move, tex_layer;
+static GLuint prog_poly, prog_post, prog_comp, prog_copy, prog_piece, prog_screen, prog_ghost, prog_ff;
 static GLuint ghost_tex[2], ghost_fbo[2]; static int ghost_cur = -1, ghost_w, ghost_h;
 static GLuint skin_tex; static int skin_w, skin_h;          /* console photo (View > Console colour) */
 static GLuint vao_poly, vbo_poly, vao_quad, vbo_quad;
-static GLuint samplers[9];                                    /* [s_mode * 3 + t_mode]: clamp, repeat, mirror */
+static GLuint samplers[18];                                   /* [s_mode * 3 + t_mode]: clamp, repeat, mirror; +9: filtered (HD text textures) */
 /* ...always smooth: above 1x, textures with alpha levels (A3I5, A5I3: shadows,
  * glows, light) are drawn filtered, so their soft edges stay a gradient; at
  * the DS's blocky texels they turned into rings of flat steps */
@@ -608,13 +688,16 @@ static int g_wide_shown = -1;                                  /* the screen com
 static float g_half_w = 128.0f;                                /* the frame being drawn: half its width (DS pixels) */
 
 static GLuint tex_col[2], tex_c2, tex_info;                   /* 2D inputs (per engine color; engine A extras) */
+static GLuint tex_tx_notext[2], tex_tx_slot[2], tex_tx_inst, tex_atlas;   /* HD text */
+static uint8_t g_atlas_made[TXG_NCELLS];
 static GLuint final_fbo, final_tex;                            /* both screens, stacked, at scale */
+static GLuint held_fbo, held_tex; static int held_w, held_h;   /* gl_hold(): a picture kept for later */
 static int g_ready;
 
 const int* g_gl_scale = &g_scale;
 
 /* ---------------------------------------------------------------- textures */
-typedef struct { uint32_t ti, pl; uint64_t hash; GLuint tex; int w, h; uint64_t checked, used; int live; } TexEntry;
+typedef struct { uint32_t ti, pl; uint64_t hash; GLuint tex; int w, h; uint64_t checked, used; int live, hd; int lab, lbx, lby, labok; GLuint up, pk; int alt; } TexEntry;   /* alt: 1 a texture pack's picture (pk), 2 upscaled (up) */
 #define TEXCACHE 4096
 static TexEntry g_texcache[TEXCACHE];
 static int g_smooth;                                           /* smooth textures (bilinear filtering) */
@@ -635,6 +718,8 @@ static TexEntry* tex_lookup(uint32_t ti, uint32_t pl) {
         TexEntry* lru = NULL;
         for (int k = 0; k < 16; k++) { TexEntry* e = &g_texcache[(h + (uint32_t)k) & (TEXCACHE - 1)]; if (!lru || e->used < lru->used) lru = e; }
         p_glDeleteTextures(1, &lru->tex);
+        if (lru->up) { p_glDeleteTextures(1, &lru->up); lru->up = 0; }
+        lru->pk = 0; lru->alt = 0;
         lru->live = 0;
         free_slot = lru;
     }
@@ -676,23 +761,273 @@ static void bleed(uint8_t* px, int w, int h) {
     for (size_t i = 0; i < (size_t)w * h; i++) if (px[i * 4 + 3] == 1) px[i * 4 + 3] = 0;
 }
 
-static GLuint texture_for(uint32_t ti, uint32_t pl, int* w, int* h) {
+/* ---------------------------------------------------------------- Mods: texture packs, upscaled textures
+ * From romusan495's PR #8 (texture packs, dumping, xBR upscaling), adapted:
+ * the game's own texture is always kept too (held compare key, Mods menu). */
+/* Upscaled textures: xBR's corner rule (Hyllian's xBR, level 1) at f times
+ * the size. Each texel's four corners look at the texels around them: where
+ * those form an edge across the corner, the corner takes the neighbour's
+ * colour along a 45-degree line, smoothed over one sub-texel. Then the GPU
+ * filters the result (HD sampler), so slopes and curves stay clean instead of
+ * turning into blurred blocks. Textures repeat, so the neighbours wrap. */
+static uint8_t* g_upbuf;
+static int xdist(const uint8_t* a, const uint8_t* b) {
+    int dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2], da = a[3] - b[3];
+    int y = (299 * dr + 587 * dg + 114 * db) / 1000, u = (-169 * dr - 331 * dg + 500 * db) / 1000, v = (500 * dr - 419 * dg - 81 * db) / 1000;
+    return 48 * abs(y) + 7 * abs(u) + 6 * abs(v) + 48 * abs(da);
+}
+static void xbr_upscale(const uint8_t* src, int w, int h, int f, uint8_t* dst) {
+#define XP(ox, oy) (src + ((size_t)(((y + (oy) * sy) % h + h) % h) * w + (size_t)(((x + (ox) * sx) % w + w) % w)) * 4)
+    int ow = w * f;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            const uint8_t* E = src + ((size_t)y * w + x) * 4;
+            const uint8_t* N[4] = { 0 };                       /* per corner (sx, sy): the colour it takes, or none */
+            for (int q = 0; q < 4; q++) {
+                int sx = q & 1 ? 1 : -1, sy = q & 2 ? 1 : -1;
+                const uint8_t *F = XP(1, 0), *H = XP(0, 1), *I = XP(1, 1), *B = XP(0, -1), *D = XP(-1, 0), *C = XP(1, -1), *G = XP(-1, 1);
+                const uint8_t *F4 = XP(2, 0), *H5 = XP(0, 2), *I4 = XP(2, 1), *I5 = XP(1, 2);
+                int wd1 = xdist(E, C) + xdist(E, G) + xdist(I, F4) + xdist(I, H5) + 4 * xdist(H, F);
+                int wd2 = xdist(H, D) + xdist(H, I5) + xdist(F, I4) + xdist(F, B) + 4 * xdist(E, I);
+                int eF = xdist(E, F), eH = xdist(E, H);
+                if (wd1 < wd2 && eF > 0 && eH > 0) N[q] = eF <= eH ? F : H;
+            }
+            for (int j = 0; j < f; j++)
+                for (int i = 0; i < f; i++) {
+                    float fx = ((float)i + 0.5f) / (float)f - 0.5f, fy = ((float)j + 0.5f) / (float)f - 0.5f;
+                    int q = (fx >= 0) | (fy >= 0) << 1;
+                    uint8_t* o = dst + ((size_t)(y * f + j) * ow + (size_t)(x * f + i)) * 4;
+                    float a = 0;
+                    if (N[q]) { float t = (fabsf(fx) + fabsf(fy) - 0.5f) * (float)f * 0.5f + 0.5f; a = t < 0 ? 0 : t > 1 ? 1 : t; }
+                    for (int c = 0; c < 4; c++) o[c] = (uint8_t)((float)E[c] + ((N[q] ? (float)N[q][c] : 0) - (float)E[c]) * a + 0.5f);
+                }
+        }
+#undef XP
+}
+
+/* ---------------------------------------------------------------- HD texture packs
+ * Each texture the game uses is known by a name made from what it looks like
+ * (a hash of its size and decoded pixels: the same picture has the same name
+ * wherever the game puts it in VRAM). textures/<name>.png (in any folder
+ * under textures/) is drawn instead, at its own size, filtered and mipmapped.
+ * "Dump textures" writes every new one to textures/dump/<name>.png, the
+ * starting point for making a pack. */
+#include "stb_image_write.h"
+#include "stb_image.h"                                         /* implemented in frontend_sdl.c */
+#ifdef _WIN32
+#include <io.h>
+#include <direct.h>
+#define mkdir_one(p) _mkdir(p)
+#else
+#include <dirent.h>
+#include <sys/stat.h>
+#define mkdir_one(p) mkdir(p, 0777)
+#endif
+
+#define PACK_DIR "textures"
+typedef struct { uint64_t key; char* path; GLuint tex; int w, h; uint64_t used; } PackTex;
+static PackTex* g_pack;                                        /* open addressing, g_pack_cap a power of two */
+static int g_pack_n, g_pack_cap, g_pack_on = 1, g_dump_on, g_pack_loaded;
+static int g_texup;                                            /* Mods > Upscale 3D textures (xbr_upscale) */
+int g_tex_compare;                                             /* held: the game's own textures, to compare */
+static int g_pack_live;                                        /* HD textures in the GPU */
+#define PACK_LIVE_MAX 3000
+static uint64_t* g_dumped; static int g_dumped_n, g_dumped_cap;
+
+static uint64_t tex_key(const uint8_t* rgba, int w, int h) {   /* FNV-1a 64 of w, h and the pixels (see-through ones as 0) */
+    uint64_t k = 0xCBF29CE484222325ull;
+    uint32_t wh[2] = { (uint32_t)w, (uint32_t)h };
+    const uint8_t* b = (const uint8_t*)wh;
+    for (int i = 0; i < 8; i++) k = (k ^ b[i]) * 0x100000001B3ull;
+    for (size_t i = 0; i < (size_t)w * h; i++) {
+        const uint8_t* p = rgba + i * 4;
+        uint32_t v = p[3] ? (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24 : 0;
+        for (int j = 0; j < 4; j++, v >>= 8) k = (k ^ (v & 0xFF)) * 0x100000001B3ull;
+    }
+    return k;
+}
+
+static PackTex* pack_find(uint64_t key, int add) {
+    if (add && (g_pack_n + 1) * 2 > g_pack_cap) {               /* grow */
+        int ncap = g_pack_cap ? g_pack_cap * 2 : 1024;
+        PackTex* n = calloc((size_t)ncap, sizeof *n);
+        for (int i = 0; i < g_pack_cap; i++) if (g_pack[i].path) {
+            uint32_t j = (uint32_t)(g_pack[i].key ^ g_pack[i].key >> 32) & (uint32_t)(ncap - 1);
+            while (n[j].path) j = (j + 1) & (uint32_t)(ncap - 1);
+            n[j] = g_pack[i];
+        }
+        free(g_pack); g_pack = n; g_pack_cap = ncap;
+    }
+    if (!g_pack_cap) return NULL;
+    uint32_t j = (uint32_t)(key ^ key >> 32) & (uint32_t)(g_pack_cap - 1);
+    while (g_pack[j].path) { if (g_pack[j].key == key) return &g_pack[j]; j = (j + 1) & (uint32_t)(g_pack_cap - 1); }
+    if (!add) return NULL;
+    g_pack[j].key = key; g_pack_n++;
+    return &g_pack[j];
+}
+
+static void pack_add_file(const char* dir, const char* name) {  /* <16 hex digits>.png */
+    size_t n = strlen(name);
+    if (n != 20 || strcmp(name + 16, ".png") != 0) return;
+    uint64_t key = 0;
+    for (int i = 0; i < 16; i++) {
+        char c = name[i]; int v = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        if (v < 0) return;
+        key = key << 4 | (uint64_t)v;
+    }
+    PackTex* t = pack_find(key, 1);
+    if (t->path) return;                                       /* the first one found wins */
+    size_t len = strlen(dir) + n + 2;
+    t->path = malloc(len); snprintf(t->path, len, "%s/%s", dir, name);
+}
+
+static void pack_scan(const char* dir, int depth) {             /* every folder under textures/ except dump/ */
+    if (depth > 8) return;
+#ifdef _WIN32
+    char pat[1024]; snprintf(pat, sizeof pat, "%s/*", dir);
+    struct _finddata_t fd; intptr_t h = _findfirst(pat, &fd);
+    if (h == -1) return;
+    do {
+        if (fd.name[0] == '.') continue;
+        if (fd.attrib & _A_SUBDIR) {
+            if (depth == 0 && !strcmp(fd.name, "dump")) continue;
+            char sub[1024]; snprintf(sub, sizeof sub, "%s/%s", dir, fd.name); pack_scan(sub, depth + 1);
+        } else pack_add_file(dir, fd.name);
+    } while (_findnext(h, &fd) == 0);
+    _findclose(h);
+#else
+    DIR* d = opendir(dir);
+    if (!d) return;
+    struct dirent* e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        char sub[1024]; snprintf(sub, sizeof sub, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(sub, &st) == 0 && S_ISDIR(st.st_mode)) { if (!(depth == 0 && !strcmp(e->d_name, "dump"))) pack_scan(sub, depth + 1); }
+        else pack_add_file(dir, e->d_name);
+    }
+    closedir(d);
+#endif
+}
+
+static void pack_unload(void) {
+    for (int i = 0; i < g_pack_cap; i++) { if (g_pack[i].tex) p_glDeleteTextures(1, &g_pack[i].tex); free(g_pack[i].path); }
+    free(g_pack); g_pack = NULL; g_pack_n = g_pack_cap = g_pack_live = 0; g_pack_loaded = 0;
+}
+
+static void pack_load_list(void) {
+    if (g_pack_loaded) return;
+    g_pack_loaded = 1;
+    pack_scan(PACK_DIR, 0);
+    if (g_pack_n) fprintf(stderr, "HD textures: %d in %s/\n", g_pack_n, PACK_DIR);
+}
+
+/* The HD texture for this picture, loaded into the GPU the first time (0 if none). */
+static GLuint pack_texture(uint64_t key) {
+    PackTex* t = pack_find(key, 0);
+    if (!t) return 0;
+    t->used = g_frameno;
+    if (t->tex) return t->tex;
+    if (t->w < 0) return 0;                                    /* couldn't be read */
+    int w, h, ch;
+    uint8_t* px = stbi_load(t->path, &w, &h, &ch, 4);
+    if (!px) { fprintf(stderr, "HD textures: can't read %s\n", t->path); t->w = -1; return 0; }
+    if (g_pack_live >= PACK_LIVE_MAX) {                        /* too many in the GPU: let the least recently used one go */
+        PackTex* lru = NULL;
+        for (int i = 0; i < g_pack_cap; i++) if (g_pack[i].tex && g_pack[i].used != g_frameno && (!lru || g_pack[i].used < lru->used)) lru = &g_pack[i];
+        if (lru) {
+            for (int i = 0; i < TEXCACHE; i++) if (g_texcache[i].live && g_texcache[i].pk == lru->tex) { g_texcache[i].w = 0; g_texcache[i].pk = 0; g_texcache[i].alt = 0; }   /* those decode again */
+            p_glDeleteTextures(1, &lru->tex); lru->tex = 0; g_pack_live--;
+        }
+    }
+    p_glGenTextures(1, &t->tex);
+    p_glBindTexture(GL_TEXTURE_2D, t->tex);
+    p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    p_glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(px);
+    t->w = w; t->h = h; g_pack_live++;
+    return t->tex;
+}
+
+static void dump_texture(uint64_t key, const uint8_t* rgba, int w, int h) {
+    for (int i = 0; i < g_dumped_n; i++) if (g_dumped[i] == key) return;   /* (few thousand at most) */
+    if (g_dumped_n == g_dumped_cap) { g_dumped_cap = g_dumped_cap ? g_dumped_cap * 2 : 1024; g_dumped = realloc(g_dumped, sizeof *g_dumped * (size_t)g_dumped_cap); }
+    g_dumped[g_dumped_n++] = key;
+    char path[64]; snprintf(path, sizeof path, PACK_DIR "/dump/%016llx.png", (unsigned long long)key);
+    FILE* f = fopen(path, "rb");
+    if (f) { fclose(f); return; }                              /* dumped in an earlier run */
+    mkdir_one(PACK_DIR); mkdir_one(PACK_DIR "/dump");
+    stbi_write_png(path, w, h, 4, rgba, w * 4);
+}
+
+static void texcache_redo(void) { for (int i = 0; i < TEXCACHE; i++) g_texcache[i].w = 0; }   /* every texture decodes again */
+
+void gl_set_texture_pack(int on) { g_pack_on = on != 0; if (!g_pack_on) pack_unload(); texcache_redo(); }
+void gl_set_tex_upscale(int on) { on = on != 0; if (on != g_texup) { g_texup = on; texcache_redo(); } }
+void gl_set_texture_dump(int on) { g_dump_on = on != 0; texcache_redo(); }
+int gl_reload_texture_pack(void) { pack_unload(); texcache_redo(); if (g_pack_on) pack_load_list(); return g_pack_n; }
+
+static int g_hd_text = 0;
+int tx_tex_tagged(uint32_t teximg);
+
+static GLuint texture_for(uint32_t ti, uint32_t pl, int* w, int* h, int* hd) {
     TexEntry* e = tex_lookup(ti, pl);
     gpu3d_tex_size(ti, w, h);
     e->used = g_frameno;
     if (e->checked != g_frameno) {
         e->checked = g_frameno;
         uint64_t hs = gpu3d_texture_hash(ti, pl);
-        if (hs != e->hash || e->w != *w || e->h != *h) {
+        int small16 = g_hd_text && ((ti >> 26) & 7) == 3 && *w <= 64 && *h <= 64;
+        int want_hd = small16 && g_tx_any && tx_tex_any(ti);
+        int lbx = e->lbx, lby = e->lby, lab = e->lab;               /* a label as a texture: looked up when its contents change */
+        if (small16 && !want_hd && (hs != e->hash || !e->labok)) { lab = tx_label_texture(ti, &lbx, &lby); e->lab = lab; e->lbx = lbx; e->lby = lby; e->labok = 1; }
+        if (!small16 || want_hd) lab = -1;
+        if (lab >= 0) want_hd = 2 + lab;
+        if (hs != e->hash || e->w != *w || e->h != *h || want_hd != e->hd) {
             double t0 = perf_ms();
             e->hash = hs; e->w = *w; e->h = *h;
             gpu3d_decode_texture(ti, pl, g_decode);
-            if (g_smooth) bleed(g_decode, *w, *h);
+            e->hd = 0;
+            if (want_hd) {                                       /* HD text: a texture with letters, made larger with them sharp */
+                static uint8_t big[64 * TXG_S * 64 * TXG_S * 4];
+                if (want_hd >= 2 ? txg_texture_label(ti, pl, g_decode, *w, *h, lab, lbx, lby, big) : txg_texture_hd(ti, pl, g_decode, *w, *h, big)) {
+                    e->hd = want_hd;
+                    bleed(big, *w * TXG_S, *h * TXG_S);
+                    p_glBindTexture(GL_TEXTURE_2D, e->tex);
+                    p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, *w * TXG_S, *h * TXG_S, 0, GL_RGBA, GL_UNSIGNED_BYTE, big);
+                    p_glGenerateMipmap(GL_TEXTURE_2D);
+                }
+            }
+            e->alt = 0; e->pk = 0;
+            if (!e->hd && (g_pack_on || g_dump_on)) {              /* Mods: a texture pack's picture for it, and dumping */
+                if (g_pack_on) pack_load_list();
+                uint64_t key = tex_key(g_decode, *w, *h);
+                if (g_dump_on) dump_texture(key, g_decode, *w, *h);
+                if (g_pack_on && g_pack_n && (e->pk = pack_texture(key))) e->alt = 1;
+            }
+            if (!e->hd && !e->alt && g_texup && *w * *h <= 256 * 256) {   /* Mods: upscaled, 4x (2x for the big ones) */
+                static uint8_t up_src[256 * 256 * 4];
+                int f = *w * *h <= 128 * 128 ? 4 : 2;
+                memcpy(up_src, g_decode, (size_t)*w * *h * 4);
+                bleed(up_src, *w, *h);
+                if (!g_upbuf) g_upbuf = malloc((size_t)512 * 512 * 16);
+                xbr_upscale(up_src, *w, *h, f, g_upbuf);
+                if (!e->up) p_glGenTextures(1, &e->up);
+                p_glBindTexture(GL_TEXTURE_2D, e->up);
+                p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, *w * f, *h * f, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_upbuf);
+                p_glGenerateMipmap(GL_TEXTURE_2D);
+                e->alt = 2;
+            }
+            if (g_smooth && !e->hd) bleed(g_decode, *w, *h);
+            if (!e->hd) {                                        /* the game's own (also kept for the compare key) */
             p_glBindTexture(GL_TEXTURE_2D, e->tex);
             p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, *w, *h, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_decode);
+            }
             g_gl_stats.uploads++; g_gl_stats.upload_texels += *w * *h; g_gl_stats.upload_ms += perf_ms() - t0;
         }
     }
+    if (e->alt && !e->hd && !g_tex_compare) { if (hd) *hd = 1; return e->alt == 1 ? e->pk : e->up; }
+    if (hd) *hd = e->hd;
     return e->tex;
 }
 
@@ -745,6 +1080,7 @@ static void free_fbs(void) {
         p_glDeleteTextures(4, t); p_glDeleteFramebuffers(2, b);
     }
     p_glDeleteTextures(1, &final_tex); p_glDeleteFramebuffers(1, &final_fbo);
+    if (held_tex) { p_glDeleteTextures(1, &held_tex); p_glDeleteFramebuffers(1, &held_fbo); held_tex = held_fbo = 0; held_w = held_h = 0; }
 }
 
 /* The largest 3D resolution this GPU can hold: widescreen up to 512 DS
@@ -763,6 +1099,7 @@ int gl_render_init(int scale) {
     prog_post = program(VS_QUAD, FS_POST, 0);
     prog_comp = program(VS_QUAD, FS_COMP, 0);
     prog_copy = program(VS_QUAD, FS_COPY, 0);
+    prog_piece = program(VS_QUAD, FS_PIECE, 0);
     prog_screen = program(VS_QUAD, FS_SCREEN, 0);
     prog_ghost = program(VS_QUAD, FS_GHOST, 0);
     prog_ff = program(VS_QUAD, FS_FF, 0);
@@ -782,7 +1119,7 @@ int gl_render_init(int scale) {
     p_glBufferData(GL_ARRAY_BUFFER, sizeof quad, quad, GL_STATIC_DRAW);
     p_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     p_glEnableVertexAttribArray(0);
-    p_glGenSamplers(9, samplers);
+    p_glGenSamplers(18, samplers);
     p_glGenSamplers(9, samplers_soft);
     static const GLint wrap[3] = { GL_CLAMP_TO_EDGE, GL_REPEAT, GL_MIRRORED_REPEAT };
     for (int i = 0; i < 9; i++) {
@@ -794,6 +1131,10 @@ int gl_render_init(int scale) {
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_MAG_FILTER, g_smooth ? GL_LINEAR : GL_NEAREST);
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_S, wrap[i / 3]);
         p_glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_T, wrap[i % 3]);
+        p_glSamplerParameteri(samplers[9 + i], GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        p_glSamplerParameteri(samplers[9 + i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        p_glSamplerParameteri(samplers[9 + i], GL_TEXTURE_WRAP_S, wrap[i / 3]);
+        p_glSamplerParameteri(samplers[9 + i], GL_TEXTURE_WRAP_T, wrap[i % 3]);
     }
     static const uint8_t white[4] = { 255, 255, 255, 255 };
     white_tex = new_tex(GL_RGBA8, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
@@ -802,6 +1143,21 @@ int gl_render_init(int scale) {
     tex_col[1] = new_tex(GL_RGBA8, 256, 192, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
     tex_c2 = new_tex(GL_RGBA8, 256, 192, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
     tex_info = new_tex(GL_RGBA8UI, 256, 192, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, GL_NEAREST);
+    tex_move = new_tex(GL_R8UI, 32, 24, GL_RED_INTEGER, GL_UNSIGNED_BYTE, GL_NEAREST);
+    tex_layer = new_tex(GL_R8UI, 256, 192, GL_RED_INTEGER, GL_UNSIGNED_BYTE, GL_NEAREST);
+    for (int i = 0; i < 2; i++) {
+        tex_tx_notext[i] = new_tex(GL_RGBA8, 256, 192, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST);
+        tex_tx_slot[i] = new_tex(GL_RGBA16UI, 256, 192, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, GL_NEAREST);
+    }
+    tex_tx_inst = new_tex(GL_RGBA32I, TX_LIST_MAX, 2, GL_RGBA_INTEGER, GL_INT, GL_NEAREST);
+    tex_atlas = new_tex(GL_R8, TXG_W, TXG_H, GL_RED, GL_UNSIGNED_BYTE, GL_LINEAR);
+    {   /* the atlas starts empty (cells are drawn as letters show up), with mipmaps */
+        uint8_t* z = calloc((size_t)TXG_W * TXG_H, 1);
+        if (z) { p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, TXG_W, TXG_H, GL_RED, GL_UNSIGNED_BYTE, z); free(z); }
+        p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 3);
+        p_glGenerateMipmap(GL_TEXTURE_2D);
+    }
     g_decode = malloc(1024 * 1024 * 4);
     p_glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     p_glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -866,7 +1222,7 @@ static void push_vertex(int* nv, const SVtx* v, float alpha, const Poly* p, floa
 #define ST_TRANS 0x40                    /* a translucent polygon is on it (its id: bits 0-4, of the DS's 0-5) */
 #define ST_MASKBIT 0x20                  /* marked by the latest shadow mask */
 #define ST_ID 0x1F
-typedef struct { int first, count; GLuint tex; int sampler; float tw, th; int translucent, depth_write, depth_eq, lines, pid, shadow, fog, alpha1; } Batch;
+typedef struct { int first, count; GLuint tex; int sampler; float tw, th; int translucent, depth_write, depth_eq, lines, pid, shadow, fog, alpha1, hd; } Batch;
 static Batch* g_batches; static int g_bcap;
 
 static void gl_vblank(void) {
@@ -923,11 +1279,11 @@ static void gl_render_(const Frame3D* f) {
         b.tex = white_tex; b.tw = 1; b.th = 1;
         if (textured) {
             int w, h;
-            b.tex = texture_for(p->teximg, p->pltt, &w, &h);
+            b.tex = texture_for(p->teximg, p->pltt, &w, &h, &b.hd);
             b.tw = (float)w; b.th = (float)h;
             int sm = (p->teximg >> 16) & 1 ? ((p->teximg >> 18) & 1 ? 2 : 1) : 0;
             int tm = (p->teximg >> 17) & 1 ? ((p->teximg >> 19) & 1 ? 2 : 1) : 0;
-            b.sampler = sm * 3 + tm;
+            b.sampler = sm * 3 + tm + (b.hd ? 9 : 0);
             b.alpha1 = fmt != 1 && fmt != 6;                      /* no alpha levels (only A3I5 and A5I3 have them) */
         }
         b.translucent = i >= f->n_opaque;
@@ -1033,9 +1389,9 @@ static void gl_render_(const Frame3D* f) {
     for (int i = 0; i < nb; i++) {
         Batch* b = &g_batches[i];
         p_glBindTexture(GL_TEXTURE_2D, b->tex);
-        p_glBindSampler(0, (!b->alpha1 && g_gl_soft_alpha && g_scale >= 2 ? samplers_soft : samplers)[b->sampler]);
+        p_glBindSampler(0, (!b->alpha1 && g_gl_soft_alpha && g_scale >= 2 && b->sampler < 9 ? samplers_soft : samplers)[b->sampler]);
         p_glUniform2f(loc_texsize, b->tw, b->th);
-        p_glUniform1i(loc_sharpa, g_smooth && b->alpha1);
+        p_glUniform1i(loc_sharpa, (g_smooth || b->hd) && b->alpha1);
         p_glDepthFunc(b->depth_eq ? GL_EQUAL : GL_LESS);
         p_glDepthMask(b->depth_write ? GL_TRUE : GL_FALSE);
         GLenum prim = b->lines ? GL_LINES : GL_TRIANGLES;
@@ -1173,8 +1529,237 @@ static void upload_rgb(GLuint tex, const uint32_t* src) {
     p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 192, GL_RGBA, GL_UNSIGNED_BYTE, buf);
 }
 
+/* HD text: the letters seen this frame (their atlas cells drawn when first
+ * needed), the picture without them, and which are over each pixel. */
+void gl_set_hd_text(int on) { g_hd_text = on != 0; g_tx_active = g_hd_text; }
+void gl_hd_fonts(const char* dir) { txg_load_fonts(dir); txg_forget_cells(); memset(g_atlas_made, 0, sizeof g_atlas_made); }
+static int hd_upload(int eng) {
+    int n = g_tx_n[eng];
+    { static int lg = -1; if (lg < 0) lg = getenv("DQIX_TXLOG") != NULL;
+      if (lg && n) fprintf(stderr, "[f%llu] HD text: engine %d, %d letters (on %d)\n", (unsigned long long)g_frame, eng, n, g_hd_text); }
+    if (!g_hd_text || !n) return 0;
+    static int32_t inst[TX_LIST_MAX * 4];
+    static uint8_t cell[TXG_CELLMAX];
+    int drawn = 0;
+    p_glBindTexture(GL_TEXTURE_2D, tex_atlas);
+    for (int i = 0; i < n; i++) {
+        TxInst* in = tx_inst_at(g_tx_list[eng][i]);
+        int c = txg_cell(in->font, in->index), cx = 0, cy = 0, cw = 0, ch = 0;
+        if (c >= 0) txg_cell_rect(c, &cx, &cy, &cw, &ch);
+        if (c >= 0 && !g_atlas_made[c] && txg_render(in->font, in->index, cell)) {
+            g_atlas_made[c] = 1; drawn = 1;
+            p_glTexSubImage2D(GL_TEXTURE_2D, 0, cx, cy, cw, ch, GL_RED, GL_UNSIGNED_BYTE, cell);
+        }
+        inst[i * 4] = in->ox[eng]; inst[i * 4 + 1] = in->oy[eng]; inst[i * 4 + 2] = cx | cy << 16;   /* the cell's atlas position */ inst[i * 4 + 3] = (int32_t)(in->ink[eng] & 0xFFFFFF);
+    }
+    if (drawn) p_glGenerateMipmap(GL_TEXTURE_2D);
+    p_glBindTexture(GL_TEXTURE_2D, tex_tx_inst);
+    p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, eng, n, 1, GL_RGBA_INTEGER, GL_INT, inst);
+    upload_rgb(tex_tx_notext[eng], g_tx_notext[eng]);
+    p_glBindTexture(GL_TEXTURE_2D, tex_tx_slot[eng]);
+    p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 192, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, g_tx_slot[eng]);
+    return 1;
+}
+
 /* Build both screens into final_tex (top screen in the upper half). */
+/* Dynamic widescreen, the windows the game draws on its 2D layers (some menus;
+ * the 3D-drawn ones move in gpu3d.c): cut into pieces (8x8 cells with 2D shown,
+ * joined to their neighbours); a piece moves right unless it is the dialogue
+ * box (wide, low: it stays in the middle) or covers most of the screen (a
+ * card, a curtain). In battles only the battle messages at the bottom move. */
+static uint8_t g_move[24][32];
+static int g_ui_shift, g_ui_battle, g_ui_hold2, g_ui_area, g_ui_shift_now, g_ui_split;   /* split: cells with bit 2, their sprites move above this line */   /* shift_now: this frame's (battles: clear of the panels) */
+void gl_set_ui_shift(int px, int battle) { g_ui_shift = px; g_ui_battle = battle; }
+void gl_set_ui_hold(int on) { g_ui_hold2 = on; }   /* a submenu: work out the windows, but move none */
+int gl_ui_area(void) { return g_ui_area; }
+int gl_ui_unshift(int* x, int y) {           /* a point on the 3D screen where a moved 2D window shows: where it really is */
+    int sx = *x - g_ui_shift_now;
+    if (!g_ui_shift_now || g_ui_hold2 || sx < 0 || sx > 255 || y < 0 || y > 191 || !g_move[y >> 3][sx >> 3] || (g_comp_info[(y * 256 + sx) * 4] & 3) == 1) return 0;
+    {   extern uint8_t g_comp_layer[256 * 192]; int l = g_comp_layer[y * 256 + sx];
+        if (!(g_move[y >> 3][sx >> 3] & (l == 4 ? 2 : l < 4 ? 1 : 0))) return 0; }
+    *x = sx; return 1;
+}
+extern int gl_ui_dump_frame(void);
+int g_ui_bg2d;   /* 8x8 cells outside the 3D scene with a 2D picture there (not black): a menu screen's own background */
+static int ui_classify(void) {
+    memset(g_move, 0, sizeof g_move); g_ui_area = 0; g_ui_bg2d = 0; g_ui_shift_now = g_ui_shift; g_ui_split = 0;
+    if (g_ui_shift <= 0) return 0;
+    static uint8_t cell[24][32]; static int16_t comp[24][32];
+    extern uint8_t g_ui_field[24][32];
+    static char litmap[24][33];
+    int any = 0;
+    for (int cy = 0; cy < 24; cy++) for (int cx = 0; cx < 32; cx++) {
+        int n = 0, lit = 0;
+        for (int y = cy * 8; y < cy * 8 + 8; y++) for (int x = cx * 8; x < cx * 8 + 8; x++) {
+            int i = y * 256 + x, k = g_comp_info[i * 4] & 3;
+            n += k != 1;
+            uint32_t c = k == 1 ? g_comp_c2[i] : g_engine_out[0][i];
+            /* (for the 3D's pixels, before the master brightness: a menu screen fading in counts from its first frame) */
+            c &= 0xFFFFFF;                                               /* (pure white: the screen turned off) */
+            lit += c != 0xFFFFFF && (((c >> 16) & 0xFF) > 0x20 || ((c >> 8) & 0xFF) > 0x20 || (c & 0xFF) > 0x20);
+        }
+        cell[cy][cx] = n >= 2; comp[cy][cx] = -1; any |= cell[cy][cx];
+        if (!g_ui_field[cy][cx] && lit >= 40) g_ui_bg2d++;
+        litmap[cy][cx] = g_ui_field[cy][cx] ? 'F' : lit >= 40 ? 'L' : (char)('0' + lit / 7);
+    }
+    if (gl_ui_dump_frame()) {                                            /* tests: the cell map */
+        {
+            fprintf(stderr, "cells f%llu bg2d %d\n", (unsigned long long)g_frame, g_ui_bg2d);
+            for (int cy = 0; cy < 24; cy++) { litmap[cy][32] = 0; fprintf(stderr, " L%s\n", litmap[cy]); }
+            {   extern uint8_t g_comp_layer[256 * 192];
+                for (int cy = 0; cy < 24; cy++) { char row[40]; for (int cx = 0; cx < 32; cx++) {
+                    int h[7] = {0}; for (int y = cy * 8; y < cy * 8 + 8; y++) for (int x = cx * 8; x < cx * 8 + 8; x++) h[g_comp_layer[y * 256 + x] % 7]++;
+                    int b = 0; for (int k = 0; k < 6; k++) if (h[k] > h[b]) b = k;
+                    row[cx] = h[b] < 2 ? '.' : (char)('0' + b); } row[32] = 0; fprintf(stderr, " Y%s\n", row); } }
+            for (int cy = 0; cy < 24; cy++) { char row[40]; for (int cx = 0; cx < 32; cx++) {
+                int n0 = 0, n2 = 0; for (int y = cy * 8; y < cy * 8 + 8; y++) for (int x = cx * 8; x < cx * 8 + 8; x++) { int v = g_comp_info[(y * 256 + x) * 4] & 3; n0 += v == 0; n2 += v == 2; }
+                int t = n0 + n2; row[cx] = t < 2 ? '.' : t >= 60 ? (n2 > n0 ? 'B' : '#') : (char)((n2 > n0 ? 'a' : '0') + t / 7); } row[32] = 0; fprintf(stderr, "  %s\n", row); }
+        }
+    }
+    if (!any) return g_ui_shift;
+    /* by layer: the game's background layers (its windows) and its sprites (often the dialogue box,
+     * the pointers) are found apart, so a window and the box it overlaps never share a decision */
+    static uint8_t gcell[2][24][32];
+    {   extern uint8_t g_comp_layer[256 * 192];
+        for (int cy = 0; cy < 24; cy++) for (int cx = 0; cx < 32; cx++) {
+            int n0 = 0, n1 = 0;
+            for (int y = cy * 8; y < cy * 8 + 8; y++) for (int x = cx * 8; x < cx * 8 + 8; x++) {
+                int i = y * 256 + x; if ((g_comp_info[i * 4] & 3) == 1) continue;
+                int l = g_comp_layer[i]; n0 += l < 4; n1 += l == 4;
+            }
+            gcell[0][cy][cx] = n0 >= 2; gcell[1][cy][cx] = n1 >= 2;
+        }
+    }
+    static int16_t qx[768], qy[768];
+    static uint8_t mark[24][32];
+    int battle_sh = 0;                                                   /* how far the battle messages move */
+    int bands[2] = { 99, 99 };                                           /* each layer group's dialogue box: its top row, rows */
+    for (int g = 0; g < 2 && !g_ui_battle; g++) {                        /* low on the screen from (nearly) edge to edge, at least 3 */
+        int top = 99, bot = -1;
+        for (int ry = 23; ry >= 0; ry--) {
+            int n = 0; for (int cx = 0; cx < 32; cx++) n += gcell[g][ry][cx];
+            int wide = gcell[g][ry][1] && gcell[g][ry][30] && n >= 26;
+            if (wide) { top = ry; if (bot < 0) bot = ry; }
+            else if (bot >= 0) break;
+        }
+        int above = 0; if (top > 0) for (int cx = 0; cx < 32; cx++) above += gcell[g][top - 1][cx];
+        if (bot >= 0 && top >= 12 && bot - top >= 2 && above < 10) bands[g] = top;   /* (a big window reaching higher, or sitting on it, is no dialogue box) */
+    }
+    int band_any = bands[0] < bands[1] ? bands[0] : bands[1];
+    int tags[16][5], ntag = 0;                                           /* the dialogue box's small windows (for after) */
+    for (int g = 0; g < 2; g++) {
+    int band = bands[g];
+    uint8_t (*cell)[32] = gcell[g];
+    memset(comp, 0xFF, sizeof comp);
+    for (int cy = 0; cy < 24; cy++) for (int cx = 0; cx < 32; cx++) {
+        if (!cell[cy][cx] || comp[cy][cx] >= 0) continue;
+        int h = 0, t = 0, x0 = cx, x1 = cx, y0 = cy, y1 = cy;
+        qx[t] = (int16_t)cx; qy[t] = (int16_t)cy; t++; comp[cy][cx] = 1;
+        while (h < t) {
+            int x = qx[h], y = qy[h]; h++;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+            static const int d[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+            for (int k = 0; k < 4; k++) {
+                int nx = x + d[k][0], ny = y + d[k][1];
+                if (nx < 0 || nx > 31 || ny < 0 || ny > 23 || !cell[ny][nx] || comp[ny][nx] >= 0) continue;
+                comp[ny][nx] = 1; qx[t] = (int16_t)nx; qy[t] = (int16_t)ny; t++;
+            }
+        }
+        int hh = y1 - y0 + 1;
+        if (g_ui_battle) {                                               /* battles: the messages at the bottom, */
+            if (y0 >= 12 && hh <= 10 && !g_ui_hold2) {                   /* clear of the party's panels as far as the right edge allows */
+                for (int k = 0; k < t; k++) g_move[qy[k]][qx[k]] |= (uint8_t)(1 << g);
+                extern int g_ui_battle_left;
+                int need = g_ui_battle_left - x0 * 8, room = 255 + g_ui_shift - (x1 * 8 + 7), sh = g_ui_shift;
+                if (need > sh) sh = need;
+                if (sh > room) sh = room < g_ui_shift ? g_ui_shift : room;
+                if (sh > battle_sh) battle_sh = sh;
+            }
+            continue;
+        }
+        if (t >= 32 * 24 * 9 / 10) continue;                             /* over the whole screen: a fade, a card, the sepia of memories */
+        /* the dialogue box stays in the middle, with the small windows sitting on it (its name tag, its Yes/No) */
+        int inband = 0; for (int k = 0; k < t; k++) inband += qy[k] >= band;
+        g_ui_area += inband;
+        /* the rest (all of it, without a dialogue box): its windows, each on its own */
+        memset(mark, 0, sizeof mark);
+        for (int k = 0; k < t; k++) if (qy[k] < band) mark[qy[k]][qx[k]] = 1;
+        static int16_t sx[768], sy[768];
+        for (int k0 = 0; k0 < t; k0++) {
+            if (mark[qy[k0]][qx[k0]] != 1) continue;
+            int sh = 0, st = 0, a0 = qx[k0], a1 = qx[k0], b0 = qy[k0], b1 = qy[k0];
+            sx[st] = qx[k0]; sy[st] = qy[k0]; st++; mark[qy[k0]][qx[k0]] = 2;
+            while (sh < st) {
+                int x = sx[sh], y = sy[sh]; sh++;
+                if (x < a0) a0 = x; if (x > a1) a1 = x; if (y < b0) b0 = y; if (y > b1) b1 = y;
+                static const int d[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+                for (int k = 0; k < 4; k++) {
+                    int nx = x + d[k][0], ny = y + d[k][1];
+                    if (nx < 0 || nx > 31 || ny < 0 || ny > 23 || mark[ny][nx] != 1) continue;
+                    mark[ny][nx] = 2; sx[st] = (int16_t)nx; sy[st] = (int16_t)ny; st++;
+                }
+            }
+            int sw = a1 - a0 + 1, shh = b1 - b0 + 1;
+            int tag = band_any != 99 && b1 >= band_any - 2 && sw <= 12 && shh <= 7;   /* on the dialogue box: its name tag, its Yes/No */
+            extern int gpu3d_ui_near_moved(int, int, int, int);
+            int box = sw >= 30 && shh <= 8 && b0 < band_any;             /* a message box across the screen on its own (an accolade): it stays in the middle */
+            if (box) tag = 1;
+            int move = !tag && sw >= 5 && (shh >= 2 || sw >= 8);         /* windows at least 40 pixels wide (not the field's marks; a wide strip: a window's edge) */
+            if (move && g == 1) {                                        /* sprites: a window has its white frame line across its top */
+                extern uint8_t g_comp_layer[256 * 192];                  /* (the items flying into the Krak Pot are sprites that size) */
+                int framed = 0;
+                for (int y = b0 * 8; y < b0 * 8 + 12 && y < 192 && !framed; y++) {
+                    int n = 0;
+                    for (int x = a0 * 8; x <= a1 * 8 + 7; x++) { uint32_t c = g_engine_out[0][y * 256 + x];
+                        n += g_comp_layer[y * 256 + x] == 4 && ((c >> 16) & 0xFF) >= 0xD0 && ((c >> 8) & 0xFF) >= 0xD0 && (c & 0xFF) >= 0xD0; }
+                    framed = n * 10 >= sw * 8 * 6;
+                }
+                if (!framed) move = 0;
+            }
+            if (!move && !tag && sw <= 4 && shh <= 3 && gpu3d_ui_near_moved(a0 * 8, b0 * 8, a1 * 8 + 7, b1 * 8 + 7)) move = 1;   /* a pointer by a moved 3D window */
+            if (!move && !tag && g == 1) {                               /* sprites on a moved window (its icons) or just left of it (its pointer) */
+                int l = sw <= 4 && shh <= 3 ? 3 : 1;
+                for (int k = 0; k < st && !move; k++)
+                    for (int x = sx[k] - l < 0 ? 0 : sx[k] - l; x <= (sx[k] + 1 > 31 ? 31 : sx[k] + 1); x++) if (g_move[sy[k]][x] & 1) { move = 1; break; }
+            }
+            if (tag && ntag < 16) { int* q = tags[ntag++]; q[0] = g; q[1] = a0; q[2] = b0; q[3] = a1; q[4] = b1; }
+            if (move) g_ui_area += st;
+            if (gl_ui_dump_frame()) fprintf(stderr, "piece g%d %d,%d-%d,%d band %d/%d tag %d move %d hold %d\n", g, a0, b0, a1, b1, band, band_any, tag, move, g_ui_hold2);
+            if (move && !g_ui_hold2) for (int k = 0; k < st; k++) g_move[sy[k]][sx[k]] |= (uint8_t)(1 << g);
+        }
+    }
+    }
+    /* a small window on the dialogue box that a moved window would now cover (the quick save's Yes/No,
+     * beside the help text) moves too */
+    for (int i = 0; i < ntag && !g_ui_hold2; i++) {
+        int g = tags[i][0], a0 = tags[i][1], b0 = tags[i][2], a1 = tags[i][3], b1 = tags[i][4], hit = 0;
+        for (int y = b0; y <= b1 && !hit; y++) for (int x = a0 - 6 < 0 ? 0 : a0 - 6; x < a0; x++) if (g_move[y][x] & 3) { hit = 1; break; }
+        if (!hit) continue;
+        for (int y = b0; y <= b1; y++) for (int x = a0; x <= a1; x++) if (gcell[g][y][x]) g_move[y][x] |= (uint8_t)(1 << g);
+        if (g == 1 && b1 + 1 < 24) {                                     /* its bottom edge, in the cells of the box's top line: */
+            extern uint8_t g_comp_layer[256 * 192];                      /* the sprite pixels above that line go too */
+            int split = -1;
+            for (int y = (b1 + 1) * 8 - 4; y < (b1 + 1) * 8 + 8 && y < 192 && split < 0; y++) {
+                int n = 0;
+                for (int x = 16; x < 200; x++) { uint32_t c = g_engine_out[0][y * 256 + x];
+                    n += g_comp_layer[y * 256 + x] == 4 && ((c >> 16) & 0xFF) > 0xC0 && ((c >> 8) & 0xFF) > 0xC0 && (c & 0xFF) > 0xC0; }
+                if (n > 150) split = y;
+            }
+            if (split > (b1 + 1) * 8) {
+                g_ui_split = split;
+                for (int x = a0; x <= a1; x++) g_move[b1 + 1][x] |= 4;
+            }
+        }
+        for (int y = b0; y <= b1; y++) for (int x = a0 - 3 < 0 ? 0 : a0 - 3; x <= a1; x++) if (gcell[1][y][x] && !(g_move[y][x] & 2)) {   /* (and its pointer) */
+            int ok = 0; for (int xx = x; xx <= a1 && !ok; xx++) ok = gcell[g][y][xx] != 0;
+            if (ok) g_move[y][x] |= 2; }
+    }
+    g_ui_shift_now = battle_sh ? battle_sh : g_ui_shift;
+    return g_ui_shift_now;
+}
+
 void gl_compose(int a_on_top, int lcd_on) {
+    int hd[2] = { hd_upload(0), hd_upload(1) };
     upload_rgb(tex_col[0], g_engine_out[0]);
     upload_rgb(tex_col[1], g_engine_out[1]);
     int has3d = g_comp_has3d && g_fb_shown >= 0 && g_fb[g_fb_shown].valid;
@@ -1188,7 +1773,7 @@ void gl_compose(int a_on_top, int lcd_on) {
     p_glDisable(GL_DEPTH_TEST); p_glDisable(GL_BLEND);
     p_glClearColor(0, 0, 0, 1); p_glClear(GL_COLOR_BUFFER_BIT);
     g_wide_shown = -1;
-    if (!lcd_on) { p_glBindFramebuffer(GL_FRAMEBUFFER, 0); return; }
+    if (!lcd_on) { g_ui_bg2d = 0; g_ui_area = 0; p_glBindFramebuffer(GL_FRAMEBUFFER, 0); return; }   /* (screens off: no menu screen either) */
     float W = (float)(256 + 2 * g_wside);
     p_glUseProgram(prog_comp);
     p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_col"), 0);
@@ -1200,7 +1785,28 @@ void gl_compose(int a_on_top, int lcd_on) {
     p_glUniform1f(p_glGetUniformLocation(prog_comp, "u_wtot"), W);
     p_glUniform1f(p_glGetUniformLocation(prog_comp, "u_wside"), (float)g_wside);
     p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_bars"), g_gl_bars);
+    {   /* dynamic widescreen: which of the 3D screen's 2D windows move right */
+        int sh = has3d && g_wside > 0 ? ui_classify() : 0;
+        if (!(has3d && g_wside > 0)) { g_ui_bg2d = 0; g_ui_area = 0; memset(g_move, 0, sizeof g_move); }
+        p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_shift"), sh);
+        p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_move"), 8);
+        p_glActiveTexture(GL_TEXTURE8); p_glBindTexture(GL_TEXTURE_2D, tex_move);
+        p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 24, GL_RED_INTEGER, GL_UNSIGNED_BYTE, g_move);
+        p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_layer"), 9);
+        p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_split"), g_ui_split);
+        {   extern uint8_t g_comp_layer[256 * 192];
+            p_glActiveTexture(GL_TEXTURE9); p_glBindTexture(GL_TEXTURE_2D, tex_layer);
+            if (sh) p_glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 192, GL_RED_INTEGER, GL_UNSIGNED_BYTE, g_comp_layer); }
+        p_glActiveTexture(GL_TEXTURE0);
+    }
     p_glUniform4f(p_glGetUniformLocation(prog_comp, "u_uv"), 0, 0, 1, 1);
+    p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_notext"), 4);
+    p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_slot"), 5);
+    p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_inst"), 6);
+    p_glUniform1i(p_glGetUniformLocation(prog_comp, "u_atlas"), 7);
+    GLint loc_hd = p_glGetUniformLocation(prog_comp, "u_hd"), loc_eng = p_glGetUniformLocation(prog_comp, "u_eng");
+    p_glActiveTexture(GL_TEXTURE6); p_glBindTexture(GL_TEXTURE_2D, tex_tx_inst);
+    p_glActiveTexture(GL_TEXTURE7); p_glBindTexture(GL_TEXTURE_2D, tex_atlas);
     p_glBindVertexArray(vao_quad);
     for (int eng = 0; eng < 2; eng++) {
         int top = eng == 0 ? a_on_top : !a_on_top;
@@ -1208,6 +1814,9 @@ void gl_compose(int a_on_top, int lcd_on) {
         p_glActiveTexture(GL_TEXTURE1); p_glBindTexture(GL_TEXTURE_2D, tex_c2);
         p_glActiveTexture(GL_TEXTURE2); p_glBindTexture(GL_TEXTURE_2D, tex_info);
         p_glActiveTexture(GL_TEXTURE3); p_glBindTexture(GL_TEXTURE_2D, has3d ? g_fb[g_fb_shown].post : white_tex);
+        p_glActiveTexture(GL_TEXTURE4); p_glBindTexture(GL_TEXTURE_2D, tex_tx_notext[eng]);
+        p_glActiveTexture(GL_TEXTURE5); p_glBindTexture(GL_TEXTURE_2D, tex_tx_slot[eng]);
+        p_glUniform1i(loc_hd, hd[eng]); p_glUniform1i(loc_eng, eng);
         p_glUniform1i(loc_has3d, eng == 0 && has3d);
         int wide = eng == 0 && has3d && g_wside > 0;                 /* the 3D screen, widened; the other in the middle */
         p_glUniform1i(loc_wide, wide);
@@ -1252,12 +1861,76 @@ static GLuint ghost_step(float keep) {
     return ghost_tex[cur];
 }
 
+/* Keep this frame's picture (both screens) to show later: the map window
+ * keeps the last map while a battle shows its commands on that screen. */
+void gl_hold(void) {
+    if (held_w != g_fb3_w || held_h != g_fb_h * 2) {
+        if (held_tex) { p_glDeleteTextures(1, &held_tex); p_glDeleteFramebuffers(1, &held_fbo); }
+        held_tex = new_tex(GL_RGBA8, g_fb3_w, g_fb_h * 2, GL_RGBA, GL_UNSIGNED_BYTE, GL_LINEAR);
+        p_glGenFramebuffers(1, &held_fbo);
+        p_glBindFramebuffer(GL_FRAMEBUFFER, held_fbo);
+        p_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, held_tex, 0);
+        held_w = g_fb3_w; held_h = g_fb_h * 2;
+    }
+    p_glBindFramebuffer(GL_FRAMEBUFFER, held_fbo);
+    p_glViewport(0, 0, held_w, held_h);
+    p_glDisable(GL_DEPTH_TEST); p_glDisable(GL_BLEND);
+    p_glUseProgram(prog_copy);
+    p_glActiveTexture(GL_TEXTURE0); p_glBindTexture(GL_TEXTURE_2D, final_tex); p_glBindSampler(0, 0);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    p_glUniform1i(p_glGetUniformLocation(prog_copy, "u_src"), 0);
+    p_glUniform4f(p_glGetUniformLocation(prog_copy, "u_rect"), -1, -1, 2, 2);
+    p_glUniform4f(p_glGetUniformLocation(prog_copy, "u_uv"), 0, 0, 1, 1);
+    p_glBindVertexArray(vao_quad);
+    p_glDrawArrays(GL_TRIANGLES, 0, 6);
+    p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+/* Widescreen battle HUD: parts of a screen (the party's panels, the commands)
+ * drawn over the picture just shown, each where the layout puts it. */
+static void draw_pieces(const GlPresent* v, GLuint src) {
+    float W = (float)(256 + 2 * g_wside);
+    GLuint prog_copy = prog_piece;                                /* (see-through pieces) */
+    p_glUseProgram(prog_copy);
+    p_glEnable(GL_BLEND); p_glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD); p_glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
+    GLint loc_see = p_glGetUniformLocation(prog_copy, "u_see");
+    p_glActiveTexture(GL_TEXTURE0); p_glBindTexture(GL_TEXTURE_2D, src); p_glBindSampler(0, 0);
+    p_glGenerateMipmap(GL_TEXTURE_2D);                           /* drawn smaller than rendered: averaged, not shimmering */
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    p_glUniform1i(p_glGetUniformLocation(prog_copy, "u_src"), 0);
+    GLint loc_rect = p_glGetUniformLocation(prog_copy, "u_rect"), loc_uv = p_glGetUniformLocation(prog_copy, "u_uv");
+    p_glBindVertexArray(vao_quad);
+    for (int i = 0; i < v->npiece && i < GL_MAX_PIECES; i++) {
+        const float* q = v->piece[i];
+        if (q[2] <= 0 || q[3] <= 0) continue;
+        /* canvas (DS pixels, y down) -> window pixels -> NDC (y up); the rect's origin is its bottom left */
+        float x0 = v->ox + q[0] * v->sc, y1 = v->oy + (q[1] + q[3]) * v->sc;
+        p_glUniform4f(loc_rect, x0 / (float)v->win_w * 2 - 1, 1 - y1 / (float)v->win_h * 2,
+                      q[2] * v->sc / (float)v->win_w * 2, q[3] * v->sc / (float)v->win_h * 2);
+        /* the screen in the composed picture: the top one in the upper half, the DS's 256 columns after the sides */
+        float vtop = q[4] < 0.5f ? 1.0f : 0.5f;
+        p_glUniform4f(loc_uv, ((float)g_wside + q[5]) / W, vtop - (q[6] + q[8]) / 384.0f, q[7] / W, q[8] / 384.0f);
+        p_glUniform1f(loc_see, q[9]);
+        p_glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    p_glDisable(GL_BLEND);
+    p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+}
+
 /* Draw the screens (and the console, if chosen) into the window. Call once
  * per emulated frame: the motion blur advances with every call. */
 void gl_present(const GlPresent* v) {
+    if (v->held && !held_tex) {                                   /* nothing kept yet: black */
+        p_glBindFramebuffer(GL_FRAMEBUFFER, 0); p_glViewport(0, 0, v->win_w, v->win_h);
+        p_glClearColor(0, 0, 0, 1); p_glClear(GL_COLOR_BUFFER_BIT);
+        return;
+    }
     int ghost = v->lcd && v->ghost;
-    GLuint src = final_tex;
-    if (ghost && v->again && ghost_cur >= 0) src = ghost_tex[ghost_cur];   /* a second window: this frame's blur as it is */
+    GLuint src = v->held ? held_tex : final_tex;
+    if (v->held) ghost = 0;
+    else if (ghost && v->again && ghost_cur >= 0) src = ghost_tex[ghost_cur];   /* a second window: this frame's blur as it is */
     else if (ghost) src = ghost_step(0.35f);
     else if (!v->again) ghost_cur = -1;
     p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1315,6 +1988,7 @@ void gl_present(const GlPresent* v) {
     p_glUniform4f(p_glGetUniformLocation(P, "u_uv"), 0, 0, 1, 1);
     p_glBindVertexArray(vao_quad);
     p_glDrawArrays(GL_TRIANGLES, 0, 6);
+    if (v->npiece) draw_pieces(v, final_tex);
     if (v->badge[2] > 0 && prog_ff && v->win_w > 0 && v->win_h > 0) {   /* fast forward is on */
         p_glEnable(GL_BLEND); p_glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD); p_glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
         p_glUseProgram(prog_ff);

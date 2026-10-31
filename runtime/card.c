@@ -270,7 +270,6 @@ static int unlock_image(uint8_t* img, uint32_t size) {
 /* Switch the downloadable content on in the save as it is loaded (before
  * the game reads it). Returns how many save slots were changed. */
 int backup_unlock_dlc(void) {
-    if (!g_rom || g_rom[15] != 'E') return 0;      /* the save layout is only known for the USA version */
     int n = unlock_image(g_backup, g_backup_size);
     if (g_backup_at_boot) unlock_image(g_backup_at_boot, g_backup_size);   /* replays start from the same save */
     if (n) LOG_INFO("save: downloadable quests and special guests unlocked in %d slot(s)\n", n);

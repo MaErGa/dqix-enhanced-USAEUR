@@ -69,11 +69,11 @@ static Thread* alloc_thread(ThreadSys* ts, uint32_t ctx) {
 }
 
 void threads_init(void) {
+    if (rom_is_eur()) {                            /* these three are in the main code, which moved */
+        g_ts9.cp_save += 0x10; g_ts9.cp_restore += 0x10; g_ts9.resume_saved += 0x10;
+    }
     g_c9.threads = &g_ts9;
     g_c7.threads = &g_ts7;
-    if (g_rom && g_rom[15] == 'P') {                 /* the European version's code sits a few bytes further on (config/eur) */
-        g_ts9.cp_save = 0x020CD5A4; g_ts9.cp_restore = 0x020CD5E4; g_ts9.resume_saved = 0x020C7D8C;
-    }
     g_ts9.cur = alloc_thread(&g_ts9, 0);           /* the host's main stack runs the ARM9 */
     coro_init_main(&g_ts9.cur->co);
 }
@@ -263,13 +263,10 @@ void threads_after_irq(Cpu* c) {
     switch_to(ts, next);
 }
 
-/* ARM9 */
-void fn_main_020c7d34(Cpu* c) { (void)c; save_context(&g_ts9); }               /* OS_SaveContext */
-void fn_main_020c7d80(Cpu* c) { (void)c; load_context(&g_ts9); }               /* OS_LoadContext */
-void fn_itcm_01ff8068(Cpu* c) { irq_thread_switch(&g_ts9); c->r[13] += 4; }   /* pops OS_IrqHandler's lr */
-/* The same functions in the European version, whose code sits a few bytes further on (config/eur). */
-void fn_main_020c7d44(Cpu* c) { (void)c; save_context(&g_ts9); }               /* OS_SaveContext */
-void fn_main_020c7d90(Cpu* c) { (void)c; load_context(&g_ts9); }               /* OS_LoadContext */
+/* ARM9 (by name: the address depends on the ROM's version, see hle.txt) */
+void hle_OS_SaveContext(Cpu* c) { (void)c; save_context(&g_ts9); }
+void hle_OS_LoadContext(Cpu* c) { (void)c; load_context(&g_ts9); }
+void hle_OS_IrqHandler_ThreadSwitch(Cpu* c) { irq_thread_switch(&g_ts9); c->r[13] += 4; }   /* pops OS_IrqHandler's lr */
 /* ARM7 */
 void fn_a7w_037fca58(Cpu* c) { (void)c; save_context(&g_ts7); }
 void fn_a7w_037fca8c(Cpu* c) { (void)c; load_context(&g_ts7); }

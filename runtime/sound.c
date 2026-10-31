@@ -298,6 +298,7 @@ static void mix_one(void) {
     if (ro < -0x8000) ro = -0x8000; else if (ro > 0x7FFF) ro = 0x7FFF;
     static int bits16 = -1; if (bits16 < 0) bits16 = getenv("DQIX_AUDIO16") != NULL;
     if (!bits16) { lo &= ~0x3F; ro &= ~0x3F; }                     /* the DS's DAC is 10-bit */
+    { extern void music_mix(int32_t*, int32_t*); music_mix(&lo, &ro); }   /* a music pack's recordings (music.c), at full depth */
     uint32_t w = g_out_w;
     if (w - g_out_r >= OUT_N) return;                               /* ring full: nobody listening */
     g_out[(w % OUT_N) * 2] = (int16_t)lo;

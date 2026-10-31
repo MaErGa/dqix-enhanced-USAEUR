@@ -36,6 +36,11 @@ void frontend_init(int argc, char** argv) {
     if (p && (g_wav = fopen(p, "wb"))) { wav_header(g_wav, 0); atexit(wav_close); }
     if (getenv("DQIX_NO3D")) g_renderer3d = &g_null3d;
     if (rt_hosted() || getenv("DQIX_HIDE_VIDEO")) video_hide();      /* another player's console in a session (DQIX_HIDE_VIDEO: tests) */
+    if (getenv("DQIX_EXPORT_MUSIC")) {                          /* tests: the songs as WAV files, then quit */
+        extern int music_export(const char*, void (*)(int, int));
+        int n = music_export(getenv("DQIX_EXPORT_MUSIC"), NULL);
+        fprintf(stderr, "music export: %d songs\n", n); exit(0);
+    }
 }
 
 /* DQIX_FRAMETIME=from_frame: histogram of host time per frame (performance checks) */

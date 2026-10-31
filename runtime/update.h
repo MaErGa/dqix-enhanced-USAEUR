@@ -11,7 +11,9 @@
 #pragma once
 #include <stddef.h>
 
-#define UPDATE_REPO "sackchief/dqix-enhanced"
+/* The GitHub repository this game updates from and sends bug reports to: "user/repository".
+ * It is this fork's, not the original project's. Change it here if the repository is renamed. */
+#define UPDATE_REPO "MaErGa/dqix-enhanced-USAEUR"
 
 typedef struct {
     int ok;                       /* both versions were read */

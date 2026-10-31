@@ -3,5 +3,5 @@
  * from. Two channels (docs/STATE.md): stable ("v26") and nightly
  * ("v27-nightly1": the work in progress towards the next stable). */
 #pragma once
-#define DQIX_VERSION "v32-nightly2-es1"
-#define DQIX_VERSION_DATE "2026-10-26"
+#define DQIX_VERSION "v32-es1"
+#define DQIX_VERSION_DATE "2026-10-27"

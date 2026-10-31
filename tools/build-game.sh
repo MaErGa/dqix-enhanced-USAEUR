@@ -9,17 +9,20 @@
 #   game/    the result: dqix.exe and everything it needs, including a copy
 #            of the ROM, so the folder can be moved anywhere
 set -e
+STEP="starting"
+# a step that fails without a message of its own still says which it was
+trap 'rc=$?; if [ $rc -ne 0 ]; then echo; echo "   The build stopped while: $STEP (error $rc)."; fi' EXIT
 cd "$(dirname "$0")/.."
 ROM="$1"
 [ -f "$ROM" ] || { echo "No ROM given (or it doesn't exist): $ROM"; exit 1; }
 
-echo "== Checking the ROM"
+STEP="checking the ROM"; echo "== Checking the ROM"
 # no checksum: any version can be tried. The game code in the header says which it is.
 CODE=$(dd if="$ROM" bs=1 skip=12 count=4 2>/dev/null | tr -cd 'A-Za-z0-9') || true
 case "$CODE" in
 YDQE) echo "   Dragon Quest IX (USA)" ;;
-YDQJ) echo "   Dragon Quest IX (Japan): not supported yet; trying anyway" ;;
 YDQP) echo "   Dragon Quest IX (Europe)" ;;
+YDQJ) echo "   Dragon Quest IX (Japan): only the USA and European versions are supported; trying anyway" ;;
 "")   echo "   Couldn't read the ROM file: $ROM"
       echo "   Is it still being copied, or open in another program? Is it a OneDrive file that isn't downloaded"
       echo "   (right-click it, Always keep on this device)? Then run this again."
@@ -28,15 +31,20 @@ YDQP) echo "   Dragon Quest IX (Europe)" ;;
 esac
 
 PY=python3; command -v $PY >/dev/null 2>&1 || PY=python
-echo "== Extracting the game's code"
+command -v $PY >/dev/null 2>&1 || { echo "   Python is missing from the build tools (MSYS2). In the MSYS2 UCRT64 window run:"
+    echo "   pacman -S mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-yaml"; echo "   then run this again."; exit 1; }
+STEP="extracting the game's code (tools/extract_rom.py)"; echo "== Extracting the game's code"
 $PY tools/extract_rom.py "$ROM" build/extract
-echo "== Recompiling it to C (about a minute)"
-# The code's addresses differ between versions: the USA ones are in the project's root files and
-# config/usa; the European ones (derived from them by matching every function, see
-# docs/TECHNICAL.md) are in config/eur. The Japanese version has none, so it uses the USA files.
-CFG=config/usa/arm9; OPT=.
-if [ "$CODE" = YDQP ]; then CFG=config/eur/arm9; OPT=config/eur; fi
-$PY recomp/build.py --extract build/extract --config $CFG --out build/recomp --hle $OPT/hle.txt --interpret $OPT/interpret.txt --patch $OPT/patches.txt --tags $OPT/tags.txt
+STEP="recompiling it to C"; echo "== Recompiling it to C (about a minute)"
+# the symbol map and address lists are the USA version's; region.py moves them for the European one
+REGION=$($PY tools/region.py "$ROM" build/extract build/region)
+if [ "$REGION" = eur ]; then CFG=build/region; CONFIG=build/region/arm9; else CFG=.; CONFIG=config/usa/arm9; fi
+# code compiled for the other version (or before this check existed) doesn't link with this one: start over
+if [ "$(cat build/obj/region.txt 2>/dev/null)" != "$REGION" ]; then
+    rm -rf build/recomp build/obj/gen
+    mkdir -p build/obj && echo "$REGION" > build/obj/region.txt
+fi
+$PY recomp/build.py --extract build/extract --config $CONFIG --out build/recomp --hle $CFG/hle.txt --interpret $CFG/interpret.txt --patch $CFG/patches.txt --tags $CFG/tags.txt --wrap $CFG/wrap.txt
 $PY recomp/arm7.py --extract build/extract --out build/recomp7 --hle hle7.txt
 
 # The program's icon: the game's own (the one the DS menu shows), made from the
@@ -73,7 +81,7 @@ RC
     fi
 }
 
-echo "== Compiling (the first time takes a while; later builds only redo what changed)"
+STEP="compiling"; echo "== Compiling (the first time takes a while; later builds only redo what changed)"
 mkdir -p game
 case "$(uname -s)" in
 MINGW*|MSYS*)
@@ -95,6 +103,7 @@ mkdir -p game/data game/skins
 rm -rf game/data/code && cp -r build/extract game/data/code     # the overlays (the game checks which is loaded)
 if ! cmp -s "$ROM" game/data/dqix.nds; then cp "$ROM" game/data/dqix.nds; fi
 cp skins/*.png skins/*.txt game/skins/ 2>/dev/null || true
+mkdir -p game/fonts && cp fonts/* game/fonts/              # HD text (fonts/README.txt)
 # optional files: the built-in Wi-Fi server's downloads and DQVC schedule
 for src in extras/wfc wfc; do
     for g in "$src"/*/; do
@@ -105,13 +114,14 @@ done
 # DQVC's news: the one message that survives (Nintendo's last), from the fans'
 # archive of Nintendo's download server. The quests and DQVC's sales are
 # built into the game; the news is Square Enix's text, so it is fetched, not kept here.
-if [ ! -f game/wfc/YDQE/infomes_47.bin ]; then
-    mkdir -p game/wfc/YDQE
-    if curl -fsSL --max-time 30 -o game/wfc/YDQE/infomes_47.bin \
-         https://raw.githubusercontent.com/InternalLoss/DLS1-Files/master/YDQE/infomes_47.bin; then
+if [ "$REGION" = eur ]; then GC=YDQP; NEWS=infomes_45.bin; else GC=YDQE; NEWS=infomes_47.bin; fi
+if [ ! -f game/wfc/$GC/$NEWS ]; then
+    mkdir -p game/wfc/$GC
+    if curl -fsSL --max-time 30 -o game/wfc/$GC/$NEWS \
+         https://raw.githubusercontent.com/InternalLoss/DLS1-Files/master/$GC/$NEWS; then
         echo "   DQVC news: fetched"
     else
-        rm -f game/wfc/YDQE/infomes_47.bin; echo "   DQVC news: not fetched (optional; Sellma just has no news)"
+        rm -f game/wfc/$GC/$NEWS; echo "   DQVC news: not fetched (optional; Sellma just has no news)"
     fi
 fi
 cat > game/play.bat <<'BAT'

@@ -11,7 +11,8 @@ OBJ ?= obj
 FRONTEND ?= none
 OUT ?= dqix
 
-RT = $(wildcard runtime/*.c)
+# Source files that older versions had, which an older updater may have left in the folder: not compiled.
+RT = $(filter-out runtime/discord.c runtime/saveimport.c,$(wildcard runtime/*.c))
 RT := $(filter-out runtime/stub_runtime.c runtime/frontend_%.c runtime/gl_render.c runtime/menu_win32.c runtime/controls.c runtime/exe_main.c,$(RT)) runtime/frontend_$(FRONTEND).c
 
 ifeq ($(FRONTEND),sdl)
@@ -80,13 +81,14 @@ $(OBJ)/rt/menu_win32.o: runtime/menu_win32.c runtime/menu.h runtime/controls.h
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -g -Wall -Wno-unused-parameter $(PIC) $(SDL_CFLAGS) $(DEFS) -Iruntime -c $< -o $@
 
-$(OBJ)/rt/frontend_sdl.o: runtime/frontend_sdl.c runtime/nds.h runtime/frontend.h runtime/gl_render.h runtime/menu.h runtime/version.h runtime/session.h runtime/air.h runtime/text.h runtime/controls.h
+$(OBJ)/rt/frontend_sdl.o: runtime/frontend_sdl.c runtime/nds.h runtime/frontend.h runtime/gl_render.h runtime/menu.h runtime/version.h runtime/session.h runtime/air.h runtime/text.h runtime/controls.h runtime/music.h
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -g -Wall -Wno-unused-parameter $(PIC) $(DETERMINISM) $(SDL_CFLAGS) $(DEFS) -Iruntime -c $< -o $@
 
 # Sessions need every PC to compute exactly the same: no stack garbage in uninitialised variables.
 DETERMINISM ?= -ftrivial-auto-var-init=zero
 $(OBJ)/rt/relay.o: runtime/relay.h runtime/relay_url.h
+$(OBJ)/rt/music.o: runtime/stb_vorbis.h runtime/dr_flac.h runtime/music.h
 $(OBJ)/rt/%.o: runtime/%.c runtime/nds.h runtime/cpu.h runtime/coro.h runtime/frontend.h runtime/version.h runtime/air.h runtime/session.h
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -g -Wall -Wextra -Wno-unused-parameter $(PIC) $(DETERMINISM) $(DEFS) -Iruntime -I$(GEN) -c $< -o $@

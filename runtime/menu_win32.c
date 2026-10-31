@@ -52,8 +52,6 @@ static HMENU sub(HMENU parent, const char* text) {
 static char g_shell_names[64][64];
 static int g_n_shells;
 static int g_shown = 1;                       /* the bar is on the window (it is off in fullscreen) */
-/* the languages a DS has in its settings that Dragon Quest IX came in (menu.h: GAMELANG_COUNT) */
-static const char* const GAMELANG_NAME[GAMELANG_COUNT] = { "English", "Fran\xC3\xA7" "ais", "Deutsch", "Italiano", "Espa\xC3\xB1ol" };
 
 static void build_menu(void) {
     g_bar = CreateMenu();
@@ -70,6 +68,12 @@ static void build_menu(void) {
     item(game, MI_VOLUME, "&Volume...\t- / =");
     item(game, MI_MUTE, "&Mute");
     item(game, MI_CONTROLS_EDIT, "&Controls...");
+    HMENU lang = sub(game, "&Language (European version)");      /* (here, not on the bar: a wider bar wraps in a small window) */
+    AppendMenuW(lang, MF_STRING, (UINT_PTR)(MI_LANG1), L"&English");
+    AppendMenuW(lang, MF_STRING, (UINT_PTR)(MI_LANG1 + 1), L"&Fran\u00e7ais");
+    AppendMenuW(lang, MF_STRING, (UINT_PTR)(MI_LANG1 + 2), L"&Deutsch");
+    AppendMenuW(lang, MF_STRING, (UINT_PTR)(MI_LANG1 + 3), L"&Italiano");
+    AppendMenuW(lang, MF_STRING, (UINT_PTR)(MI_LANG1 + 4), L"E&spa\u00f1ol");
     sep(game);
     HMENU sf = sub(game, "Save &file");
     item(sf, MI_SAVE_EXPORT, "&Export your save (a copy)...");
@@ -98,6 +102,8 @@ static void build_menu(void) {
     item(ol, MI_OUTLINE0, "&Thin (clean, like emulators at a high resolution)");
     item(ol, MI_OUTLINE0 + 1, "&Medium");
     item(ol, MI_OUTLINE0 + 2, "Like the &DS (thicker, follows the polygons)");
+    item(gfx, MI_HD_TEXT, "&HD text: the letters at full resolution (Enhanced, new)\tF1");
+    item(gfx, MI_SOFT_SHADOWS, "Soft s&hadows and glows (Enhanced)");
 
     HMENU scr = sub(g_bar, "&Screen");
     item(scr, MI_LCD, "&DS Lite screen\tF6");
@@ -121,8 +127,8 @@ static void build_menu(void) {
     item(view, MI_STACKED, "S&tacked\tF2");
     item(view, MI_SIDE, "&Side by side\tF2");
     item(view, MI_CORNER, "Top screen in the &corner\tF2");
-    item(view, MI_WIDE, "&Widescreen (the action wide, the other screen in a corner)\tF2");
-    item(view, MI_WIDE_DYN, "Widescreen, d&ynamic (experimental: makes room for menus)\tF2");
+    item(view, MI_WIDE, "&Basic Widescreen (the action wide, the other screen in a corner)\tF2");
+    item(view, MI_WIDE_DYN, "D&ynamic Widescreen (Experimental): the map stays in the corner, the game's windows move right\tF2");
     item(view, MI_TWO, "Two wi&ndows (one screen in each, for two monitors)\tF2");
     sep(view);
     item(view, MI_SINGLE, "Single scr&een (widescreen: hide the small screen)\tU");
@@ -176,30 +182,35 @@ static void build_menu(void) {
 
     HMENU modern = sub(g_bar, "&Modern");
     item(modern, MI_ANALOG, "Walk in any &direction with the left stick");
-    item(modern, MI_WIDE, "&Widescreen: the action wide, the other screen in a corner");
-    item(modern, MI_WIDE_DYN, "Widescreen, d&ynamic (experimental)");
+    item(modern, MI_WIDE, "&Basic Widescreen: the action wide, the other screen in a corner");
+    item(modern, MI_WIDE_DYN, "D&ynamic Widescreen (Experimental)");
     item(modern, MI_CORNER, "Top screen in the &corner (the field as on the DS)");
     item(modern, MI_POPOUT, "Widescreen: the small screen in its own &window (a clean field)");
     item(modern, MI_SCENE_BARS, "Widescreen: &black sides in this place (remembered)");
+    item(modern, MI_HUD, "Widescreen: battle &HUD over the 3D (experimental: the party's panels in the bottom left)");
     sep(modern);
     item(modern, MI_MODERN_HELP, "&What is this?");
-    HMENU lang = sub(g_bar, "&Language / Idioma");
-    HMENU ui = sub(lang, "&Menus and messages");
+    HMENU mods = sub(g_bar, "M&ods");
+    item(mods, MI_TEXPACK, "&Texture packs (the pictures in the textures folder)");
+    item(mods, MI_TEXUP, "&Upscale the 3D textures (xBR: smooth slopes and curves)");
+    item(mods, MI_TEXRELOAD, "&Reload the texture packs");
+    item(mods, MI_TEXFOLDER, "&Open the textures folder");
+    sep(mods);
+    item(mods, MI_TEXDUMP, "&Dump textures (to make a pack: every texture shown goes to textures\\dump)");
+    sep(mods);
+    item(mods, MI_MUSPACK, "&Music packs (the recordings in the music folder)");
+    item(mods, MI_MUSRELOAD, "R&eload the music");
+    item(mods, MI_MUSFOLDER, "O&pen the music folder (and its list of the songs)");
+    item(mods, MI_MUSNAMES, "&Show each song's name as it starts");
+    item(mods, MI_MUSEXPORT, "E&xport the game's songs (WAV files with their loops, to music\\export: about 650 MB)");
+    sep(mods);
+    item(mods, MI_MODS_HELP, "&What is this?");
+    HMENU ui = sub(g_bar, "I&nterface language / Idioma");
     for (int i = 0; i < i18n_count(); i++) {
         wchar_t w[64];
         MultiByteToWideChar(CP_UTF8, 0, i18n_name(i), -1, w, 64);
-        AppendMenuW(ui, MF_STRING, (UINT_PTR)(MI_LANG0 + i), w);
+        AppendMenuW(ui, MF_STRING, (UINT_PTR)(MI_UILANG0 + i), w);
     }
-    HMENU gl = sub(lang, "&Game text (needs a ROM that has the language)");
-    item(gl, MI_GAMELANG0, "&Automatic (like a DS: your system's language)");
-    sep(gl);
-    for (int i = 0; i < GAMELANG_COUNT; i++) {
-        wchar_t w[64];
-        MultiByteToWideChar(CP_UTF8, 0, GAMELANG_NAME[i], -1, w, 64);
-        AppendMenuW(gl, MF_STRING, (UINT_PTR)(MI_GAMELANG0 + 1 + i), w);
-    }
-    sep(lang);
-    item(lang, MI_LANG_HELP, "&What is this?");
     HMENU help = sub(g_bar, "&Help");
     item(help, MI_CONTROLS, "&Controls");
     item(help, MI_UPDATE, "Check for &updates...");

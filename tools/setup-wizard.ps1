@@ -29,6 +29,8 @@ $Es = @{
     'There is no ROM (.nds file) in this zip.' = 'No hay ninguna ROM (archivo .nds) en este zip.'
     ' (in the zip: {0})' = ' (dentro del zip: {0})'
     'There is no ROM (.nds file) in {0}.' = 'No hay ninguna ROM (archivo .nds) en {0}.'
+    'Dragon Quest IX (Japan). Only the USA and European versions are supported: this one may not build or may not run, but you can try.' = 'Dragon Quest IX (Jap\u00f3n). Solo se admiten las versiones USA y europea: esta puede que no se compile o no funcione, pero puedes intentarlo.'
+    'Dragon Quest IX (Europe). English, French, German, Italian or Spanish: choose in Game > Language.' = 'Dragon Quest IX (Europa). Ingl\u00e9s, franc\u00e9s, alem\u00e1n, italiano o espa\u00f1ol: elige en Juego > Idioma.'
     'Choose the .nds file made from your cartridge (or a .zip with it inside), or drag it into this window.' = 'Elige el archivo .nds hecho a partir de tu cartucho (o un .zip que lo contenga), o arr\u00e1stralo a esta ventana.'
     'DS ROM, or a zip with one in it (*.nds;*.zip)|*.nds;*.zip|All files (*.*)|*.*' = 'ROM de DS, o un zip con una dentro (*.nds;*.zip)|*.nds;*.zip|Todos los archivos (*.*)|*.*'
     'This file can''t be read: {0}' = 'No se puede leer este archivo: {0}'
@@ -113,7 +115,7 @@ function T([string]$Text) {
 # ---------------------------------------------------------------- checks (no window needed)
 
 # Which ROM is this? Returns @{ Ok; Warn; Text }. Any readable file can be
-# tried: only the USA version is known to work, the others get a warning.
+# tried: the USA and European versions work, the others get a warning.
 # A ROM inside a .zip works too (Find-ZipRom, Expand-ZipRom: rom-unzip.ps1).
 . (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'rom-unzip.ps1') -Load
 
@@ -139,8 +141,8 @@ function Test-Rom([string]$Path) {
 function Test-RomCode([string]$code) {
     switch ($code) {
         'YDQE' { return @{ Ok = $true; Warn = $false; Text = (T 'Dragon Quest IX (USA).') } }
-        'YDQJ' { return @{ Ok = $true; Warn = $true; Text = (T 'Dragon Quest IX (Japan). This version isn''t supported yet: it will most likely not build or not run, but you can try.') } }
-        'YDQP' { return @{ Ok = $true; Warn = $false; Text = (T 'Dragon Quest IX (Europe).') } }
+        'YDQP' { return @{ Ok = $true; Warn = $false; Text = (T 'Dragon Quest IX (Europe). English, French, German, Italian or Spanish: choose in Game > Language.') } }
+        'YDQJ' { return @{ Ok = $true; Warn = $true; Text = (T 'Dragon Quest IX (Japan). Only the USA and European versions are supported: this one may not build or may not run, but you can try.') } }
         default { return @{ Ok = $true; Warn = $true; Text = ((T 'This doesn''t look like a Dragon Quest IX ROM (game code ''{0}''). It will most likely not build, but you can try.') -f $code) } }
     }
 }
@@ -223,6 +225,15 @@ function Copy-Project([string]$Dest) {
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
     & robocopy.exe $src $dst /E /XD .git build game update /XF last-rom.txt /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw ((T 'Copying the files to {0} failed (robocopy {1}).') -f $dst, $LASTEXITCODE) }
+    # The folders of source files are mirrored: a file the newer version no longer has (a removed source file) must
+    # not stay behind, because the build compiles every runtime\*.c it finds. game, build, rom and update are not touched.
+    foreach ($d in 'runtime', 'recomp', 'tools', 'lang', 'config', 'docs', 'tests', 'extras', 'skins', 'wfc', 'third_party') {
+        $from = Join-Path $src $d
+        if (Test-Path -LiteralPath $from) {
+            & robocopy.exe $from (Join-Path $dst $d) /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+            if ($LASTEXITCODE -ge 8) { throw ((T 'Copying the files to {0} failed (robocopy {1}).') -f $dst, $LASTEXITCODE) }
+        }
+    }
 }
 
 function Copy-Rom([string]$Rom, [string]$Dest) {

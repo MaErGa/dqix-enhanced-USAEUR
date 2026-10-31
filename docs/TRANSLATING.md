@@ -1,13 +1,11 @@
 # Translating the game's interface
 
 The menus, messages and dialogs of the PC game can be shown in several
-languages (**Language / Idioma** menu). Right now: English and Spanish.
+languages (**Interface language / Idioma** menu). Right now: English and Spanish.
 
-This is separate from the game's own text, which comes from the ROM. The
-Language menu has a second part, *Game text*, that sets the DS language the
-game starts with; it only does something with a ROM that has that language
-(the European Dragon Quest IX has English, French, German, Italian and
-Spanish; the USA one is English only).
+This is separate from the game's own text, which comes from the ROM: with the
+European Dragon Quest IX (English, French, German, Italian, Spanish) it is chosen in
+*Game > Language*; the USA one is English only.
 
 ## How it works
 
@@ -34,7 +32,8 @@ menu), and the same number of `&` (the underlined letter of a menu entry; pick
 one that no other entry of the same menu uses).
 
 The language of the operating system is used the first time; the choice is saved
-in `settings.ini` (`language = es`). `game_language = auto` follows the system.
+in `settings.ini` (`interface_language = es`; `auto` follows the system). The key `language` is the
+game's own text (Game > Language), not this.
 
 ## The installer
 

@@ -2,15 +2,44 @@
 
 **Dragon Quest IX: Sentinels of the Starry Skies, as a native PC game.**
 
-This project turns your own copy of Dragon Quest IX (the USA DS cartridge's
-ROM) into a real Windows program, built on your PC from your ROM. Nothing
+This project turns your own copy of Dragon Quest IX (the USA or European DS
+cartridge's ROM) into a real Windows program, built on your PC from your ROM. Nothing
 from the game is included here: no code, no graphics, no music. It isn't an
 emulator running the DS's code. The game's code has been recompiled into
 native PC code, with the DS's hardware rebuilt around it. So it can play
 exactly like the original, and it can also do things the DS never could.
 
-**Join the community on Discord: https://discord.gg/CczgRv36NK** for help,
-news, and friends to play with.
+**Project page:** https://github.com/MaErGa/dqix-enhanced-USAEUR (releases, questions and bug reports).
+
+## Screenshots
+
+Left: the game as on the DS. Right: Enhanced mode with Dynamic Widescreen
+(Experimental), the 3D drawn at your monitor's resolution and wider than
+the DS's screen.
+
+<table>
+<tr><th>Like the DS</th><th>Enhanced, Dynamic Widescreen</th></tr>
+<tr>
+<td><img src="docs/images/ds-4.jpg" alt="The menu on the DS screens"></td>
+<td><img src="docs/images/enhanced-4.jpg" alt="The menu in Dynamic Widescreen"></td>
+</tr>
+<tr><td colspan="2">Exploring: the field fills the screen, the map stays in the top left, and the game's own windows move right, clear of it.</td></tr>
+<tr>
+<td><img src="docs/images/ds-3.jpg" alt="Choosing commands on the DS screens"></td>
+<td><img src="docs/images/enhanced-3.jpg" alt="Choosing commands in Dynamic Widescreen"></td>
+</tr>
+<tr><td colspan="2">Choosing commands: the party's panels stacked in the bottom left over the battle, see-through with solid lines.</td></tr>
+<tr>
+<td><img src="docs/images/ds-2.jpg" alt="An attack on the DS screens"></td>
+<td><img src="docs/images/enhanced-2.jpg" alt="An attack in Dynamic Widescreen"></td>
+</tr>
+<tr><td colspan="2">While the attacks play: each panel shrinks to the name and HP/MP, and the battle messages move clear of them.</td></tr>
+<tr>
+<td><img src="docs/images/ds-1.jpg" alt="Experience earned on the DS screens"></td>
+<td><img src="docs/images/enhanced-1.jpg" alt="Experience earned in Dynamic Widescreen"></td>
+</tr>
+<tr><td colspan="2">After the battle: the experience window big and see-through over the scene.</td></tr>
+</table>
 
 ## Features
 
@@ -45,12 +74,15 @@ original)
 - **Walk in any direction with the left stick** (on at first): the stick
   steers like the DS stylus while you walk around, instead of the D-pad's 8
   directions (without the stylus's arrow on the screen).
-- **Widescreen**: the action drawn wider than the DS's screen, so you see
+- **Basic Widescreen**: the action drawn wider than the DS's screen, so you see
   more of the world left and right, with the other screen (the map, the
   battle commands) small in a corner: pick the corner, size and how
   see-through it is, also from a controller. 16:9 in a window, as wide as
-  your monitor in fullscreen. A dynamic version (experimental) slides the
-  field over to make room for menus.
+  your monitor in fullscreen.
+- **Dynamic Widescreen (Experimental)**: the field never moves; the map
+  stays top left and the game's own windows move right, clear of it, with
+  dialogue in the middle; screens of their own show 4:3; in battles the
+  party's panels sit stacked in the bottom left.
 - **Single screen**: one screen as big as it gets, switched with a trigger.
 - **Top screen in the corner**: the same, with the field as on the DS.
 - Coming: a free camera (see the roadmap).
@@ -79,12 +111,13 @@ original)
 
 ## Getting started
 
-You need your own Dragon Quest IX cartridge's ROM (`.nds`; the USA or the
-European version), Windows 10 or 11 (64-bit), about 3 GB of free space, and the internet the
+You need your own Dragon Quest IX cartridge's ROM (`.nds`; the USA or
+European version, others can be tried; the European one plays in the language
+chosen in Game > Language), Windows 10 or 11 (64-bit), about 3 GB of free space, and the internet the
 first time.
 
 1. Download the latest **stable** release from the
-   **[Releases page](https://github.com/sackchief/dqix-enhanced/releases)**
+   **Releases page** of this repository
    (*Source code (zip)*) and unzip it. The **Nightly** release there is the
    newest work, less tested.
 2. Double-click **`Install Dragon Quest IX.bat`**. A setup window walks you
@@ -148,16 +181,15 @@ LAN (Tailscale, ZeroTier or Radmin VPN) and use the host's address there.
 
 ## Languages
 
-The menus and messages are in English and Spanish (**Language / Idioma** menu; the
-first time it follows your system). The game's own text comes from your ROM:
-the Language menu also sets the DS language the game starts with, which only
-matters for a ROM that has more than one language (the European one: English,
-French, German, Italian and Spanish, plus the interface in Spanish, new in this version, see
-docs/TECHNICAL.md; the USA one is English only). Translators: see [docs/TRANSLATING.md](docs/TRANSLATING.md).
+The menus and messages are in English and Spanish (**Interface language / Idioma** menu; the first
+time it follows your system). The game's own text is a different thing: with the European ROM it is
+chosen in *Game > Language* (English, French, German, Italian, Spanish; the first run follows your
+system). Translators: see [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
-Also: *Game > Speed of the fast forward* (2x, 4x or unlimited; `fast_speed` in settings.ini), the
-installer and uninstaller in Spanish when Windows is, and, in a session, the console of the other
-players is not drawn (it is never looked at), which is most of what it would cost your CPU.
+Also in this version: *Game > Speed of the fast forward* (2x, 4x or unlimited; `fast_speed` in
+settings.ini), the installer and uninstaller in Spanish when Windows is, and, in a session, the
+console of the other players is not drawn (it is never looked at), which is most of what it would
+cost your CPU.
 
 ## Updating
 
@@ -168,10 +200,13 @@ version of this project, builds the game again from your ROM, and restarts.
 Your saves and settings are kept, and the previous version is kept
 in the `update` folder (`update\rollback.bat` goes back to it).
 
-To update by hand (a newer version you downloaded, or this version over an older one), unzip it
-anywhere and double-click **`Update Dragon Quest IX.bat`**: it finds the installed game (or asks
-where it is), copies the new files over it, builds again, and keeps your saves, settings and ROM.
-It needs no ROM and no questions; the installer window shows the progress.
+To update by hand (a newer version you downloaded), unzip it anywhere and double-click
+**`Update Dragon Quest IX.bat`**: it finds the installed game (or asks where it is), copies the new
+files over it, builds again, and keeps your saves, settings and ROM. The installer window shows the
+progress.
+
+The game updates from this repository (`UPDATE_REPO` in `runtime/update.h`): it reads `runtime/version.h`
+from its `stable` and `main` branches, so both branches have to exist.
 
 ## What's next
 
@@ -184,9 +219,15 @@ Press **F10** in the game: it saves a report in `game\reports\` with a box
 to describe what happened. For multiplayer problems, also include
 `game\session\front.log`.
 
-Questions, or stuck? Ask on the [Discord](https://discord.gg/CczgRv36NK).
+Questions, or stuck? Open an issue at https://github.com/MaErGa/dqix-enhanced-USAEUR/issues.
 
 ## About this project
+
+DQIX Enhanced (USA and EUR) is based on the open-source project *dqix-enhanced* (GPL-3.0-or-later), and
+it is distributed under the same license (see LICENSE). It was modified in 2026: it adds the Spanish
+interface (and the way to add more languages), the translated installer and uninstaller, the
+*Update Dragon Quest IX.bat* updater, the fast-forward speed menu, and the speed-ups for sessions.
+
 
 The function names and boundaries come from the public-domain Dragon Quest
 IX decompilation project. The wireless chip, the 3D renderer and the sound
@@ -200,5 +241,6 @@ you dumped from your own cartridge.
 
 Licence: GPL-3.0-or-later (see `LICENSE`). It includes public-domain data
 from the DQIX decompilation project (`config/`), libslirp (BSD,
-`third_party/libslirp`) and stb_truetype (public domain), and translated
+`third_party/libslirp`), stb_truetype, stb_image and stb_vorbis (public
+domain), dr_flac (public domain / MIT-0), and translated
 parts of melonDS (GPL-3.0-or-later).

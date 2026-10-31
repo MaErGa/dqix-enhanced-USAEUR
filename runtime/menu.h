@@ -20,22 +20,21 @@ enum {
     MI_CORNER0 = 250,                                                   /* + 0..3: top left, top right, bottom right, bottom left */
     MI_OUTLINE0 = 260,                                                  /* + 0..2: thin, medium, like the DS */
     MI_SCENE_BARS = 263, MI_SAVE_EXPORT, MI_SAVE_IMPORT,
+    MI_SOFT_SHADOWS = 270, MI_SMOOTH_SHADE, MI_HD_TEXT,
+    MI_MUSPACK = 350, MI_MUSRELOAD, MI_MUSFOLDER, MI_MUSNAMES, MI_MUSEXPORT,
+    MI_TEXPACK = 330, MI_TEXUP, MI_TEXDUMP, MI_TEXRELOAD, MI_TEXFOLDER, MI_MODS_HELP,
+    MI_LANG1 = 300,                                                     /* English, French, German, Italian, Spanish (+0..4) */
     MI_SSIZE0 = 254,                                                    /* + 0..2: small, medium, large */
     MI_SEND_REPORT = 210,
-    MI_LANG0 = 300,                                                     /* + the interface language's index (i18n.h) */
-    MI_GAMELANG0 = 320,                                                 /* automatic; + 1..GAMELANG_COUNT: the game's text */
-    MI_LANG_HELP = 330,
-    MI_SPEED0 = 350,                                                    /* + 0: 2x, 1: 4x, 2: unlimited (fast forward) */
+    MI_HUD = 320,                                                       /* widescreen battles: the HUD over the 3D */
+    MI_UILANG0 = 400,                                                   /* + the interface language's index (i18n.h) */
+    MI_SPEED0 = 420,                                                    /* + 0: 2x, 1: 4x, 2: unlimited (fast forward) */
 };
-
-/* The languages Dragon Quest IX has in its DS settings, in the DS's own order after Japanese:
- * English, French, German, Italian, Spanish. */
-#define GAMELANG_COUNT 5
 
 /* shell_names: the console colours, in order (MI_SHELLC0 + i) */
 void menu_init(SDL_Window* win, const char* const* shell_names, int n_shells);
-void menu_show(int on);                       /* hidden in fullscreen */
 void menu_rebuild(void);                      /* the language changed: new texts (then menu_sync()) */
+void menu_show(int on);                       /* hidden in fullscreen */
 /* Fullscreen: the menu bar shown in a strip of its own over the top of the
  * screen (on the window itself it made Windows shrink the picture). */
 void menu_strip(int on);
@@ -44,7 +43,7 @@ int menu_strip_shown(void);                  /* fullscreen: the menu strip is sh
  * bar, borders: it could come back as a bare popup stuck in the corner). */
 void window_fix_frame(SDL_Window* win);
 /* Put a file on the clipboard, as Explorer's Copy does: Ctrl+V in a browser
- * (GitHub) or Discord attaches it. 1 if done (Windows). */
+ * (GitHub) attaches it. 1 if done (Windows). */
 int clipboard_set_file(const char* path);
 /* Windows' Open / Save As box. filter: "Saves (*.sav;*.dsv)|*.sav;*.dsv|All files|*.*".
  * 1 with the chosen path in out (UTF-8), 0 if cancelled or not on Windows. */
@@ -79,7 +78,7 @@ typedef struct {
     int host;                     /* this PC hosts */
     int can_start;                /* host: friends are in */
     int failed;                   /* the session couldn't start: only Back */
-    char heading[192];            /* "Give your friends this address:" / "Connected to:" */
+    char heading[96];             /* "Give your friends this address:" / "Connected to:" */
     char address[128];
     char hint[1000];
     char players[4][96];

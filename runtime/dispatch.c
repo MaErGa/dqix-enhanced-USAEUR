@@ -106,6 +106,25 @@ int overlay_is_loaded(int id) {
     return o->loaded;
 }
 
+/* Which overlays are loaded now (bit per overlay id; ids up to 63), for the frontend
+ * (the Alchemimicon's screens, a test log). Only looks: it never touches the cache
+ * the game's calls use (overlay_is_loaded), so asking at any moment - a mouse move -
+ * can't change what the game runs (players far apart must stay identical). */
+uint64_t overlays_loaded_mask(void) {
+    uint64_t m = 0;
+    for (int i = 0; i < g_ovl_count && i < 64; i++) {
+        const Ovl* o = &g_ovl[i];
+        uint32_t start = o->code_start ? o->code_start - o->base : 0;
+        uint32_t end = o->code_end > o->base ? o->code_end - o->base : o->size;
+        uint32_t code = end - start, n = code < 256 ? code : 256;
+        const uint8_t* ram = &g_main_ram[o->base & (MAIN_RAM_SIZE - 1)];
+        int loaded = memcmp(ram + start, o->img + start, n) == 0;
+        if (loaded && code > 1024) { uint32_t mid = (start + code / 2) & ~3u; loaded = memcmp(ram + mid, o->img + mid, 64) == 0; }
+        if (loaded) m |= 1ull << i;
+    }
+    return m;
+}
+
 /* ---------------------------------------------------------------- emulated time
  * Generated code adds each instruction run's estimated ARM9 cycles to g_cyc
  * (g_cyc7 for the ARM7). At function entries and loop iterations, once
